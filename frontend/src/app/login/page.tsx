@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 import React from "react";
 import Link from "next/link";
@@ -62,7 +63,7 @@ export default function Login() {
 
               <div style={{ textAlign: 'center', marginTop: '24px' }}>
                 <p className="body-s text-color-secondary">
-                  Don't have an account? <Link href="/signup" className="text-color-primary-light" style={{ textDecoration: 'underline' }}>Sign up</Link>
+                  Don&apos;t have an account? <Link href="/signup" className="text-color-primary-light" style={{ textDecoration: 'underline' }}>Sign up</Link>
                 </p>
               </div>
             </div>
