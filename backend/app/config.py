@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     # Solana
     solana_rpc_url: str = "https://api.devnet.solana.com"
     program_id: str = "ByADChPce9hwCuSak9hFwiiCyndYGj7dkYypm4XYEJL1"
+    zk_program_id: str = "A5taiN69gN4EALtyM9X9S7dVMbhA5qo8aejHrfo48mVv"
     cluster: str = "devnet"
     provider_keypair_json: str = ""
     verifier_keypairs_json: str = ""

@@ -13,7 +13,7 @@ from app.chain import indexer
 from app.chain.client import get_chain
 from app.chain.signer import input_commitment_message, receipt_message, verify_receipt
 from app.config import settings
-from app.db import download_blob, first, public_url, table
+from app.db import BUCKET_OUTPUTS, download_blob, first, public_url, table, trace_blob_path
 from app.ipfs import gateway_url
 from app.utils import explorer_addr, explorer_tx, sha256_hex
 
@@ -233,6 +233,7 @@ def blob_uris(b: dict[str, Any]) -> dict[str, str | None]:
         "source": prog.get("source_uri"),
         "input": row.get("input_uri") or (input_uri_for(exp["input_hash"]) if exp["input_hash"] else None),
         "output": rc.get("output_uri") or (output_uri_for(b["pda"]) if has_receipt else None),
+        "trace": f"{BUCKET_OUTPUTS}/{trace_blob_path(b['pda'])}" if has_receipt else None,
     }
 
 
@@ -265,6 +266,12 @@ def build_artifacts(b: dict[str, Any]) -> dict[str, Any]:
             "expected_hash": exp["output_hash"],
             "ipfs_cid": rc.get("output_ipfs_cid"),
             "ipfs_url": gateway_url(rc.get("output_ipfs_cid")),
+        },
+        "trace": {
+            "uri": uris["trace"],
+            "url": public_url(uris["trace"]),
+            "expected_root": exp["trace_root"],
+            "version": "TRACE_V2",
         },
     }
 
@@ -485,6 +492,82 @@ async def reexecute(b: dict[str, Any]) -> dict[str, Any]:
     return report
 
 
+async def trace_report(b: dict[str, Any], *, recompute: bool = True) -> dict[str, Any]:
+    """Provider's published TRACE_V2 vs the on-chain trace_root and (optionally) an
+    independent server-side re-execution; pinpoints the first divergent step."""
+    import json
+
+    from app.engine import trace as tracing
+    from app.engine.runner import run
+
+    exp, uris = expected_hashes(b), blob_uris(b)
+    onchain_root = (exp.get("trace_root") or "").lower() or None
+    report: dict[str, Any] = {
+        "request_pda": b["pda"],
+        "version": tracing.TRACE_VERSION,
+        "onchain_trace_root": onchain_root,
+        "published": None,
+        "published_check": None,
+        "published_matches_chain": None,
+        "recomputed": None,
+        "recomputed_matches_chain": None,
+        "first_divergence": None,
+        "error": None,
+    }
+    if not onchain_root:
+        report["error"] = "no receipt yet"
+        return report
+
+    raw, err = await fetch_blob(uris["trace"])
+    published: dict[str, Any] | None = None
+    if raw is not None:
+        try:
+            published = json.loads(raw.decode("utf-8"))
+            check = tracing.check_document(published)
+            report["published"] = published
+            report["published_check"] = check
+            report["published_matches_chain"] = check["trace_root"] == onchain_root
+        except (UnicodeDecodeError, json.JSONDecodeError, TypeError) as e:
+            report["published_check"] = {"ok": False, "errors": [f"unparseable trace: {e}"]}
+    else:
+        report["published_check"] = {"ok": False, "errors": [f"trace blob unavailable: {err}"]}
+
+    if not recompute:
+        return report
+    (wasm, wasm_err), (inp, inp_err) = await asyncio.gather(fetch_blob(uris["wasm"]), fetch_blob(uris["input"]))
+    if wasm is None or inp is None:
+        report["error"] = f"cannot re-execute: {wasm_err or inp_err}"
+        return report
+    try:
+        res = await asyncio.to_thread(run, wasm, inp, fuel_limit=settings.fuel_limit)
+    except Exception as e:  # noqa: BLE001  (ExecutionError or unexpected engine failure)
+        report["error"] = f"re-execution failed: {e}"
+        return report
+    mine = res.trace_document(b["pda"], sha256_hex(wasm))
+    report["recomputed"] = {k: mine[k] for k in ("trace_root", "leaf_count", "output_hash")}
+    report["recomputed_matches_chain"] = mine["trace_root"] == onchain_root
+
+    if published and published.get("steps"):
+        theirs = [s.get("leaf", "") for s in published["steps"]]
+        ours = [s["leaf"] for s in mine["steps"]]
+        idx = tracing.first_divergence(theirs, ours)
+        if idx is not None:
+            p_step = published["steps"][idx] if idx < len(published["steps"]) else None
+            m_step = mine["steps"][idx] if idx < len(mine["steps"]) else None
+            leaves = [bytes.fromhex(x) for x in ours]
+            report["first_divergence"] = {
+                "index": idx,
+                "of": max(len(theirs), len(ours)),
+                "kind": (m_step or p_step or {}).get("kind"),
+                "label": (m_step or p_step or {}).get("label"),
+                "provider_step": p_step,
+                "independent_step": m_step,
+                "independent_proof": tracing.merkle_proof(leaves, idx) if m_step else None,
+                "agreed_prefix": idx,
+            }
+    return report
+
+
 # ------------------------------------------------------------------ timeline
 
 def _timeline_item(event_type: str, at: Any, tx_sig: str | None = None, slot: Any = None,
@@ -551,10 +634,13 @@ async def build_request_detail(pda: str, *, include_integrity: bool = True) -> d
     if b is None:
         return None
 
+    from app.chain.zk import zk_status
+
     audit_rows_task = asyncio.to_thread(db_audit_rows, pda)
     config_task = chain_read("get_config")
     integrity_task = compute_integrity(b) if include_integrity else asyncio.sleep(0, result=None)
-    audit_rows, config, integrity = await asyncio.gather(audit_rows_task, config_task, integrity_task)
+    zk_task = zk_status(pda, expected_hashes(b)["program_hash"])
+    audit_rows, config, integrity, zk = await asyncio.gather(audit_rows_task, config_task, integrity_task, zk_task)
 
     row = b.get("row") or {}
     chain_req = b.get("chain") or {}
@@ -603,6 +689,7 @@ async def build_request_detail(pda: str, *, include_integrity: bool = True) -> d
         "artifacts": build_artifacts(b),
         "timeline": build_timeline(b, audit_rows),
         "integrity": integrity,
+        "zk": zk,
         "challenge": challenge,
         "links": {
             "request": addr_link(pda),

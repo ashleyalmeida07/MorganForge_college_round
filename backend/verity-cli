@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# verity-cli verify <request_pda>  |  verity-cli evidence <bundle.zip>
+DIR="$(cd "$(dirname "$0")" && pwd)"
+PY="$DIR/.venv/bin/python"; [ -x "$PY" ] || PY="$DIR/.venv/Scripts/python"; [ -x "$PY" ] || PY=python3
+exec "$PY" "$DIR/scripts/verity_cli.py" "$@"

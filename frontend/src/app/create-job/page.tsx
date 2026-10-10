@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { Loader2, CheckCircle2, ExternalLink } from 'lucide-react';
+import { Loader2, CheckCircle2, ExternalLink, ArrowRight } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -55,6 +57,17 @@ interface Success {
 }
 
 export default function CreateJobPage() {
+  // useSearchParams needs a Suspense boundary in the App Router.
+  return (
+    <Suspense fallback={null}>
+      <CreateJobForm />
+    </Suspense>
+  );
+}
+
+function CreateJobForm() {
+  const searchParams = useSearchParams();
+  const requestedProgram = (searchParams.get('program') ?? '').toLowerCase();
   const { data: programs, error: programsError, loading: programsLoading } = useApi<Program[]>('/programs');
   const { publicKey, connected, signMessage } = useWallet();
   const verity = useVerityProgram();
@@ -78,13 +91,14 @@ export default function CreateJobPage() {
     [programs, programHash],
   );
 
-  // Auto-select the first rule set once the list loads.
+  // Auto-select the rule set from ?program=<hash> (from /rulesets), else the first one, once the list loads.
   useEffect(() => {
     if (!programHash && programs && programs.length > 0) {
-      setProgramHash(programs[0].program_hash);
-      setInputText(exampleText(programs[0]));
+      const initial = programs.find((p) => p.program_hash.toLowerCase() === requestedProgram) ?? programs[0];
+      setProgramHash(initial.program_hash);
+      setInputText(exampleText(initial));
     }
-  }, [programs, programHash]);
+  }, [programs, programHash, requestedProgram]);
 
   // Live canonical-JSON hash preview.
   useEffect(() => {
@@ -263,6 +277,12 @@ export default function CreateJobPage() {
               <a href={`/requests/${success.requestPda}`} className="inline-flex items-center gap-1 text-blue-600 hover:underline">
                 View timeline <ExternalLink className="h-3.5 w-3.5" />
               </a>
+              <Link
+                href={`/requests/${success.requestPda}`}
+                className="inline-flex items-center gap-1 font-semibold text-blue-700 hover:underline"
+              >
+                Track &amp; verify this request <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
               {pdaUrl && (
                 <a href={pdaUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline">
                   View request account <ExternalLink className="h-3.5 w-3.5" />

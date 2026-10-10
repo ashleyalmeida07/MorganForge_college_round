@@ -12,6 +12,11 @@ BUCKET_INPUTS = "inputs"
 BUCKET_OUTPUTS = "outputs"
 
 
+def trace_blob_path(request_pda: str) -> str:
+    """Published TRACE_V2 document for a request (inside the outputs bucket)."""
+    return f"{request_pda}.trace.json"
+
+
 @lru_cache
 def get_db() -> Client:
     return create_client(settings.supabase_url, settings.supabase_service_role_key)

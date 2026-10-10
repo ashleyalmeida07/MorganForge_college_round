@@ -1,0 +1,12 @@
+[package]
+name = "credit_risk"
+version = "1.0.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+verity_abi = { workspace = true }

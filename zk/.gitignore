@@ -1,0 +1,4 @@
+# circuit build outputs (copied to frontend/public/zk and programs/verity_core/zk-artifacts by build.mjs)
+build/
+# circom compiler binary (downloaded: github.com/iden3/circom/releases v2.2.3)
+bin/
