@@ -13,6 +13,10 @@ import {
   FileCode,
   Layers,
   Award,
+  Download,
+  Sparkles,
+  Loader2,
+  Scale
 } from "lucide-react";
 import dynamic from "next/dynamic";
 
@@ -59,6 +63,9 @@ export default function RequestDetailClient({ pda }: { pda: string }) {
   const [reverifying, setReverifying] = useState(false);
   const [reverifyResult, setReverifyResult] = useState<any | null>(null);
 
+  const [aiExplanation, setAiExplanation] = useState<string | null>(null);
+  const [explainingAi, setExplainingAi] = useState(false);
+
   const fetchDetail = useCallback(async () => {
     if (!pda) return;
     try {
@@ -74,7 +81,6 @@ export default function RequestDetailClient({ pda }: { pda: string }) {
 
   useEffect(() => {
     fetchDetail();
-    // Poll every 4 seconds for live status updates on devnet
     const timer = setInterval(fetchDetail, 4000);
     return () => clearInterval(timer);
   }, [fetchDetail]);
@@ -92,12 +98,24 @@ export default function RequestDetailClient({ pda }: { pda: string }) {
     }
   };
 
+  const handleExplainAi = async () => {
+    setExplainingAi(true);
+    try {
+      const res = await apiPost<{ text: string }>("/ai/explain-dispute", { request_pda: pda });
+      setAiExplanation(res.text);
+    } catch (e: any) {
+      setAiExplanation(`AI dispute summary unavailable: ${e.message || String(e)}`);
+    } finally {
+      setExplainingAi(false);
+    }
+  };
+
   if (loading && !data) {
     return (
       <AppShell>
-        <div className="container mx-auto py-12 max-w-5xl flex flex-col items-center justify-center min-h-[50vh] space-y-3">
-          <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
-          <p className="text-sm text-slate-500 font-mono">Loading request {shortKey(pda, 6)}...</p>
+        <div className="container mx-auto py-16 max-w-5xl flex flex-col items-center justify-center min-h-[50vh] space-y-3">
+          <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
+          <p className="text-sm text-slate-500 font-mono">Loading request {shortKey(pda, 6)}…</p>
         </div>
       </AppShell>
     );
@@ -121,54 +139,74 @@ export default function RequestDetailClient({ pda }: { pda: string }) {
   const isVerified = status === "Verified";
   const isRejected = status === "Rejected";
 
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const evidenceZipUrl = `${apiUrl}/requests/${pda}/evidence.zip`;
+
   return (
     <AppShell>
       <div className="container mx-auto py-8 px-4 sm:px-6 max-w-5xl space-y-6">
-        {/* Navigation & Header */}
+        {/* Navigation & Header Actions */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link
               href="/dashboard"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:text-slate-900 transition shadow-xs"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-50 transition shadow-xs"
             >
               <ArrowLeft className="w-3.5 h-3.5" /> Back to Dashboard
             </Link>
             <div className="h-4 w-px bg-slate-300" />
             <span className="font-mono text-xs text-slate-500">
-              PDA: <strong className="text-slate-800">{shortKey(pda, 8)}</strong>
+              PDA: <strong className="text-slate-900">{shortKey(pda, 8)}</strong>
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={`/verify/${pda}`}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-blue-200 bg-blue-50 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition shadow-xs"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-blue-600" /> Verify in Browser
+            </Link>
+
+            <a
+              href={evidenceZipUrl}
+              download={`verity-evidence-${pda}.zip`}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-xs"
+              title="Download Evidence Bundle for Offline Audits"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-500" /> Evidence (.zip)
+            </a>
+
             <a
               href={explorerAddress(pda) || `https://explorer.solana.com/address/${pda}?cluster=devnet`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-blue-600 hover:text-blue-700 transition shadow-xs"
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-medium text-slate-700 hover:text-blue-600 transition shadow-xs"
             >
-              Solana Explorer <ExternalLink className="w-3 h-3" />
+              Explorer <ExternalLink className="w-3 h-3 text-slate-400" />
             </a>
+
             <button
               onClick={handleReverify}
               disabled={reverifying}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition shadow-xs disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${reverifying ? "animate-spin" : ""}`} />
-              {reverifying ? "Auditing..." : "Re-Verify Integrity"}
+              {reverifying ? "Auditing…" : "Re-Verify"}
             </button>
           </div>
         </div>
 
-        {/* Hero Card */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
+        {/* Hero Card (Crisp White Theme) */}
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-4">
             <div>
               <div className="flex items-center gap-2.5">
                 <h1 className="text-xl font-bold text-slate-900">
-                  {req?.title || "Computation Request"}
+                  {req?.title || "Verifiable Computation Job"}
                 </h1>
                 <span
-                  className={`px-2.5 py-0.5 rounded-full text-xs font-semibold font-mono border ${
+                  className={`px-2.5 py-0.5 rounded-full text-xs font-bold font-mono border ${
                     isVerified
                       ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                       : isRejected
@@ -184,12 +222,12 @@ export default function RequestDetailClient({ pda }: { pda: string }) {
                 </span>
               </div>
               <p className="text-xs text-slate-500 font-mono mt-1">
-                Rule Set: {shortKey(req?.program_hash || data?.chain?.program_hash, 10)}
+                Program Hash: {shortKey(req?.program_hash || data?.chain?.program_hash, 10)}
               </p>
             </div>
 
             <div className="text-right">
-              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Bounty</div>
+              <div className="text-xs text-slate-400 uppercase tracking-wider font-bold">Escrow Bounty</div>
               <div className="text-lg font-bold text-slate-900 font-mono">{bountySol} SOL</div>
             </div>
           </div>
@@ -197,43 +235,65 @@ export default function RequestDetailClient({ pda }: { pda: string }) {
           {/* Key Facts Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
             <div>
-              <span className="text-slate-400 block text-[11px]">Requester:</span>
-              <span className="text-slate-700 font-semibold">{shortKey(req?.requester_pubkey || data?.chain?.requester, 6)}</span>
+              <span className="text-slate-400 block text-[11px] font-semibold uppercase">Requester:</span>
+              <span className="text-slate-800 font-bold">{shortKey(req?.requester_pubkey || data?.chain?.requester, 6)}</span>
             </div>
             <div>
-              <span className="text-slate-400 block text-[11px]">Staked Provider:</span>
-              <span className="text-slate-700 font-semibold">{shortKey(receipt?.provider || req?.provider_pubkey, 6)}</span>
+              <span className="text-slate-400 block text-[11px] font-semibold uppercase">Staked Provider:</span>
+              <span className="text-slate-800 font-bold">{shortKey(receipt?.provider || req?.provider_pubkey, 6)}</span>
             </div>
             <div>
-              <span className="text-slate-400 block text-[11px]">Verifier Attestations:</span>
-              <span className="text-slate-700 font-semibold">{attestations.length} Attestation(s)</span>
+              <span className="text-slate-400 block text-[11px] font-semibold uppercase">Attestation Count:</span>
+              <span className="text-slate-800 font-bold">{attestations.length} Node(s)</span>
             </div>
             <div>
-              <span className="text-slate-400 block text-[11px]">Fuel Used:</span>
-              <span className="text-slate-700 font-semibold">{receipt?.fuel_used ? `${receipt.fuel_used.toLocaleString()} units` : "—"}</span>
+              <span className="text-slate-400 block text-[11px] font-semibold uppercase">Fuel Consumed:</span>
+              <span className="text-slate-800 font-bold">{receipt?.fuel_used ? `${receipt.fuel_used.toLocaleString()} units` : "—"}</span>
             </div>
           </div>
 
-          {/* Active Challenge Window Countdown */}
+          {/* Challenge Window Countdown */}
           {isAwaiting && (
             <div className="pt-2">
               <ChallengeWindowCountdown receiptAt={receiptAtUnix} windowSecs={120} onExpired={fetchDetail} />
             </div>
           )}
 
-          {/* Dispute Banner if Disputed */}
+          {/* Dispute Banner with AI Explainer Trigger */}
           {isDisputed && dispute && (
-            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-2">
-              <div className="flex items-center gap-2 font-bold text-amber-800">
-                <AlertTriangle className="w-4 h-4 text-amber-600" />
-                Active Dispute on Chain (Status: {dispute.status})
+            <div className="p-4 rounded-xl bg-amber-50/80 border border-amber-200 text-amber-900 text-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-bold text-amber-900">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  Active Staked Dispute on Chain (Status: {dispute.status})
+                </div>
+                <button
+                  type="button"
+                  onClick={handleExplainAi}
+                  disabled={explainingAi}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white border border-amber-200 text-amber-900 hover:bg-amber-100 font-semibold transition shadow-xs text-xs"
+                >
+                  {explainingAi ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 text-violet-600" />}
+                  Explain with AI
+                </button>
               </div>
               <p>
-                A challenger opened a staked dispute challenging the receipt with claimed hash:
-                <code className="ml-1 bg-amber-100 px-1.5 py-0.5 rounded font-mono text-[11px]">
+                A challenger staked SOL to challenge this receipt with claimed hash:
+                <code className="ml-1 bg-white px-1.5 py-0.5 rounded font-mono text-[11px] border border-amber-200">
                   {shortKey(dispute.claimed_output_hash, 12)}
                 </code>
               </p>
+
+              {(aiExplanation || dispute.ai_explanation) && (
+                <div className="p-3.5 rounded-lg bg-white border border-slate-200 text-slate-800 font-sans space-y-1 mt-2">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-violet-700">
+                    <Sparkles className="w-3.5 h-3.5" /> AI Dispute Summary
+                  </div>
+                  <p className="text-xs text-slate-600 whitespace-pre-wrap leading-relaxed">
+                    {aiExplanation || dispute.ai_explanation}
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -241,36 +301,36 @@ export default function RequestDetailClient({ pda }: { pda: string }) {
         {/* Re-verify Audit Result Banner (if triggered) */}
         {reverifyResult && (
           <div
-            className={`rounded-2xl border p-5 text-xs space-y-3 font-mono ${
+            className={`rounded-2xl border p-5 text-xs space-y-3 font-mono shadow-xs ${
               reverifyResult.all_ok
-                ? "bg-emerald-950/20 border-emerald-500/40 text-emerald-300"
-                : "bg-rose-950/30 border-rose-500/50 text-rose-300"
+                ? "bg-emerald-50/80 border-emerald-200 text-emerald-900"
+                : "bg-rose-50/80 border-rose-200 text-rose-900"
             }`}
           >
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+            <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
               <span className="font-bold flex items-center gap-2">
                 {reverifyResult.all_ok ? (
                   <>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Independent Re-Verification Passed
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Independent Re-Verification Passed
                   </>
                 ) : (
                   <>
-                    <XCircle className="w-4 h-4 text-rose-400" /> Independent Re-Verification Flagged Inconsistencies
+                    <XCircle className="w-4 h-4 text-rose-600" /> Independent Re-Verification Flagged Inconsistencies
                   </>
                 )}
               </span>
-              <span className="text-[11px] opacity-80">
-                Zero-Trust Verification
+              <span className="text-[11px] opacity-75 font-semibold">
+                Zero-Trust Audit Result
               </span>
             </div>
 
             {reverifyResult.checks && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {reverifyResult.checks.map((chk: any, idx: number) => (
-                  <div key={idx} className="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800">
+                  <div key={idx} className="p-2.5 rounded-xl bg-white border border-slate-200 shadow-xs">
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-400 capitalize">{chk.target}:</span>
-                      <span className={chk.ok ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>
+                      <span className="text-slate-500 capitalize">{chk.target}:</span>
+                      <span className={chk.ok ? "text-emerald-700 font-bold" : "text-rose-700 font-bold"}>
                         {chk.ok ? "MATCH ✓" : "MISMATCH ✗"}
                       </span>
                     </div>
@@ -297,35 +357,35 @@ export default function RequestDetailClient({ pda }: { pda: string }) {
         )}
 
         {/* Blobs & Artifacts Inspection */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs space-y-4">
           <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
             <Layers className="w-4 h-4 text-blue-600" /> Cryptographic Artifacts & Blobs
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-2">
-              <span className="font-semibold text-slate-700 flex items-center gap-1.5">
-                <FileCode className="w-3.5 h-3.5 text-blue-600" /> Input Blob (Committed)
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+              <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                <FileCode className="w-3.5 h-3.5 text-blue-600" /> Committed Input Blob
               </span>
-              <div className="text-slate-500 break-all">
+              <div className="text-slate-600 break-all">
                 Hash: {req?.input_hash || data?.chain?.input_hash}
               </div>
               {req?.input_uri && (
-                <div className="text-blue-600 truncate">
+                <div className="text-blue-700 font-semibold truncate">
                   URI: {req.input_uri}
                 </div>
               )}
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-2">
-              <span className="font-semibold text-slate-700 flex items-center gap-1.5">
-                <Award className="w-3.5 h-3.5 text-emerald-600" /> Output Blob (Receipt)
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+              <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                <Award className="w-3.5 h-3.5 text-emerald-600" /> Output Receipt Blob
               </span>
-              <div className="text-slate-500 break-all">
-                Hash: {receipt?.output_hash || "Awaiting execution..."}
+              <div className="text-slate-600 break-all">
+                Hash: {receipt?.output_hash || "Awaiting provider execution…"}
               </div>
               {receipt?.output_uri && (
-                <div className="text-emerald-600 truncate">
+                <div className="text-emerald-700 font-semibold truncate">
                   URI: {receipt.output_uri}
                 </div>
               )}
@@ -334,13 +394,13 @@ export default function RequestDetailClient({ pda }: { pda: string }) {
         </div>
 
         {/* Verifier Attestations Consensus Table */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-600" /> Verifier Node Attestations
             </h2>
             <span className="text-xs font-mono text-slate-500">
-              Consensus Threshold: <strong className="text-slate-800">2/3 Nodes</strong>
+              Consensus Threshold: <strong className="text-slate-900">2/3 Registered Nodes</strong>
             </span>
           </div>
 
@@ -351,21 +411,21 @@ export default function RequestDetailClient({ pda }: { pda: string }) {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs font-mono text-left">
-                <thead className="border-b border-slate-100 text-slate-400">
+                <thead className="border-b border-slate-200 text-slate-400">
                   <tr>
-                    <th className="py-2">Verifier Pubkey</th>
-                    <th className="py-2">Attested Output Hash</th>
-                    <th className="py-2">Verdict</th>
-                    <th className="py-2">Counted</th>
+                    <th className="py-2.5">Verifier Pubkey</th>
+                    <th className="py-2.5">Attested Output Hash</th>
+                    <th className="py-2.5">Verdict</th>
+                    <th className="py-2.5">Quorum Counted</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {attestations.map((att: any, idx: number) => (
-                    <tr key={idx} className="hover:bg-slate-50/50">
-                      <td className="py-2.5 font-semibold text-slate-800">
+                    <tr key={idx} className="hover:bg-slate-50 transition">
+                      <td className="py-2.5 font-semibold text-slate-900">
                         {shortKey(att.verifier_pubkey || att.verifier, 6)}
                       </td>
-                      <td className="py-2.5 text-slate-600">
+                      <td className="py-2.5 text-slate-600 font-mono">
                         {shortKey(att.output_hash, 8)}
                       </td>
                       <td className="py-2.5">
@@ -379,8 +439,8 @@ export default function RequestDetailClient({ pda }: { pda: string }) {
                           {att.matches ? "MATCH ✓" : "MISMATCH ✗"}
                         </span>
                       </td>
-                      <td className="py-2.5 text-slate-500">
-                        {att.counted ? "Yes" : "No"}
+                      <td className="py-2.5 text-slate-600">
+                        {att.counted ? "Yes (Registered)" : "No"}
                       </td>
                     </tr>
                   ))}

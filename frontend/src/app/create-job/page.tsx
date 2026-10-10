@@ -4,7 +4,21 @@ import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { Loader2, CheckCircle2, ExternalLink, ArrowRight } from 'lucide-react';
+import {
+  Loader2,
+  CheckCircle2,
+  ExternalLink,
+  ArrowRight,
+  Zap,
+  Code2,
+  Coins,
+  Clock,
+  Fingerprint,
+  RotateCcw,
+  ShieldCheck,
+  Layers,
+  Sparkles
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -21,10 +35,10 @@ import { explorerAddress, explorerTx } from '@/lib/env';
 const INPUT_COMMITMENT_DOMAIN = new TextEncoder().encode('VERITY_INPUT_V1');
 
 const SELECT_CLASS =
-  'w-full appearance-none rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-shadow';
+  'w-full appearance-none rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-mono';
 const FIELD_CLASS =
-  'w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-shadow';
-const LABEL_CLASS = 'text-sm font-semibold text-slate-700';
+  'w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-mono';
+const LABEL_CLASS = 'text-xs font-mono font-bold uppercase tracking-wider text-slate-600';
 
 const DEADLINE_OPTIONS = [10, 30, 60, 240];
 
@@ -38,7 +52,7 @@ const exampleText = (p?: Program) =>
 
 function Chevron() {
   return (
-    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
+    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-slate-400">
       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
     </div>
   );
@@ -58,7 +72,6 @@ interface Success {
 }
 
 export default function CreateJobPage() {
-  // useSearchParams needs a Suspense boundary in the App Router.
   return (
     <Suspense fallback={null}>
       <CreateJobForm />
@@ -92,7 +105,6 @@ function CreateJobForm() {
     [programs, programHash],
   );
 
-  // Auto-select the rule set from ?program=<hash> (from /rulesets), else the first one, once the list loads.
   useEffect(() => {
     if (!programHash && programs && programs.length > 0) {
       const initial = programs.find((p) => p.program_hash.toLowerCase() === requestedProgram) ?? programs[0];
@@ -101,7 +113,6 @@ function CreateJobForm() {
     }
   }, [programs, programHash, requestedProgram]);
 
-  // Live canonical-JSON hash preview.
   useEffect(() => {
     let cancelled = false;
     let parsed: unknown;
@@ -134,6 +145,13 @@ function CreateJobForm() {
     setInputText(exampleText(programs?.find((p) => p.program_hash === hash)));
   };
 
+  const handleFormatJson = () => {
+    try {
+      const parsed = JSON.parse(inputText);
+      setInputText(JSON.stringify(parsed, null, 2));
+    } catch {}
+  };
+
   const bountyNum = Number(bountySol);
   const bountyValid = Number.isFinite(bountyNum) && bountyNum > 0;
   const walletReady = connected && !!publicKey && !!verity;
@@ -150,7 +168,7 @@ function CreateJobForm() {
   const onCreate = async () => {
     setError(null);
     if (!walletReady || !publicKey || !verity) {
-      setError('Connect your wallet (top right)');
+      setError('Please connect your Solana wallet in the top right header.');
       return;
     }
     if (!selected) return;
@@ -165,32 +183,29 @@ function CreateJobForm() {
 
     setRunning(true);
     try {
-      // 1. Prepare: backend canonicalizes, stores and hashes the input.
-      setStep('Preparing request (uploading input)…');
+      setStep('Uploading canonical payload & pinning…');
       const prep = await apiPost<PrepareOut>('/requests/prepare', {
         program_hash: selected.program_hash,
         input,
         requester: publicKey.toBase58(),
       });
 
-      // 2. Integrity check: our own canonical hash must match the server's.
-      setStep('Verifying input hash locally…');
+      setStep('Verifying input hash locally (RFC 8785)…');
       const localHash = await sha256Hex(canonicalJson(input));
       if (normHex(localHash) !== normHex(prep.input_hash)) {
         throw new Error(
-          `Integrity check failed: local input hash ${shortHash(localHash)} does not match server hash ${shortHash(prep.input_hash)}. Aborted.`,
+          `Integrity mismatch: local hash ${shortHash(localHash)} ≠ server hash ${shortHash(prep.input_hash)}. Aborted.`,
         );
       }
 
-      // 3. Sign a requester input commitment: proof of exactly what was asked for,
-      //    independent of trusting the chain or the backend (§4.4 "Plus").
       if (!signMessage) {
-        throw new Error('This wallet cannot sign messages (required for the input commitment).');
+        throw new Error('Connected wallet cannot sign Ed25519 messages (required for input commitment).');
       }
-      setStep('Predicting request account…');
+
+      setStep('Predicting request PDA on Solana…');
       const { request: predictedPda } = await predictRequestPda(verity);
 
-      setStep('Sign input commitment in your wallet…');
+      setStep('Sign input commitment in Phantom/wallet…');
       const commitmentMsg = concatBytes(
         INPUT_COMMITMENT_DOMAIN,
         fromHex(prep.program_hash),
@@ -207,8 +222,7 @@ function CreateJobForm() {
         signature: toBase64(commitmentSig),
       });
 
-      // 4. Sign + send create_request with the connected wallet, pinned to the same PDA.
-      setStep('Waiting for wallet signature…');
+      setStep('Sign & broadcast create_request transaction on Solana…');
       const { requestPda, signature } = await createRequest(
         verity,
         {
@@ -221,8 +235,7 @@ function CreateJobForm() {
         predictedPda,
       );
 
-      // 5. Confirm with the backend so it indexes and links the request.
-      setStep('Confirming with Verity backend…');
+      setStep('Confirming with Verity indexer…');
       let confirmWarning: string | undefined;
       try {
         await apiPost('/requests/confirm', {
@@ -232,7 +245,7 @@ function CreateJobForm() {
           input_ipfs_cid: prep.ipfs_cid ?? null,
         });
       } catch (e) {
-        confirmWarning = `Request is on-chain, but backend confirmation failed: ${errorMessage(e)}. It will be picked up by the indexer.`;
+        confirmWarning = `Request is live on Solana, but backend confirmation hit: ${errorMessage(e)}. The indexer will reconcile automatically.`;
       }
 
       setSuccess({ requestPda, signature, confirmWarning });
@@ -250,85 +263,106 @@ function CreateJobForm() {
 
   return (
     <AppShell>
-      <div className="container mx-auto py-10 max-w-5xl">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-slate-900">Create Computation Job</h1>
-          <p className="text-slate-500 mt-1 text-sm">Request a verifiable computation on the network.</p>
+      <div className="container mx-auto py-8 max-w-5xl space-y-6">
+        {/* Header Banner */}
+        <div className="p-6 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
+          <div className="flex items-center gap-2 text-xs font-mono font-bold px-2.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 w-fit mb-2">
+            <Zap className="w-3.5 h-3.5 text-blue-600" /> ON-CHAIN COMPUTATION DISPATCH
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+            Dispatch Computation Job
+          </h1>
+          <p className="mt-1 text-xs text-slate-500 max-w-2xl leading-relaxed">
+            Commit an agreed rule set and canonical JSON inputs to Solana devnet. Escrow a SOL bounty; autonomous verifiers will re-execute the WASM and attest before settlement.
+          </p>
         </div>
 
         {success ? (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-6 space-y-4">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-              <h2 className="text-base font-semibold text-slate-900">Request created</h2>
-            </div>
-            <p className="text-sm text-slate-600">
-              Your computation request is live on-chain. A staked provider will claim and execute it, then 3 independent
-              verifiers re-execute and attest to the result.
-            </p>
-            <div className="text-sm text-slate-700 space-y-1">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-6 space-y-5 shadow-xs font-mono">
+            <div className="flex items-center gap-2.5">
+              <CheckCircle2 className="h-6 w-6 text-emerald-600" />
               <div>
-                Request PDA: <span className="font-mono">{shortKey(success.requestPda, 6)}</span>
-              </div>
-              <div>
-                Transaction: <span className="font-mono">{shortKey(success.signature, 8)}</span>
+                <h2 className="text-base font-bold text-slate-900">Computation Request Dispatched on Solana</h2>
+                <p className="text-xs text-slate-600">Transaction confirmed; account initialized with escrowed bounty.</p>
               </div>
             </div>
-            <div className="flex flex-wrap gap-4 text-sm">
-              <a href={`/requests/${success.requestPda}`} className="inline-flex items-center gap-1 text-blue-600 hover:underline">
-                View timeline <ExternalLink className="h-3.5 w-3.5" />
-              </a>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-white border border-emerald-200 text-xs">
+              <div>
+                <span className="text-slate-500 block text-[11px]">Request PDA Account:</span>
+                <span className="text-blue-700 font-bold break-all">{success.requestPda}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[11px]">Solana Tx Signature:</span>
+                <span className="text-slate-900 font-bold break-all">{shortKey(success.signature, 10)}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 text-xs">
               <Link
                 href={`/requests/${success.requestPda}`}
-                className="inline-flex items-center gap-1 font-semibold text-blue-700 hover:underline"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition shadow-sm shadow-blue-500/20"
               >
-                Track &amp; verify this request <ArrowRight className="h-3.5 w-3.5" />
+                Open Execution Audit Console <ArrowRight className="h-3.5 w-3.5" />
               </Link>
-              {pdaUrl && (
-                <a href={pdaUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline">
-                  View request account <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              )}
               {txUrl && (
-                <a href={txUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline">
-                  View transaction <ExternalLink className="h-3.5 w-3.5" />
+                <a
+                  href={txUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition"
+                >
+                  Explorer Tx <ExternalLink className="h-3.5 w-3.5" />
                 </a>
               )}
-            </div>
-            {success.confirmWarning && <p className="text-xs text-amber-700">{success.confirmWarning}</p>}
-            <div className="flex justify-end pt-2">
+              {pdaUrl && (
+                <a
+                  href={pdaUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition"
+                >
+                  Explorer PDA <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              )}
               <Button
                 onClick={reset}
-                className="bg-slate-900 hover:bg-slate-800 text-white font-medium py-2.5 px-6 h-auto rounded-lg shadow-sm transition-colors"
+                variant="outline"
+                className="ml-auto text-xs border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
               >
-                Create another
+                Create Another Job
               </Button>
             </div>
+
+            {success.confirmWarning && (
+              <p className="text-[11px] text-amber-700 bg-amber-50 p-3 rounded-lg border border-amber-200">
+                {success.confirmWarning}
+              </p>
+            )}
           </div>
         ) : (
-          <div className="space-y-10 divide-y divide-slate-200">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-8 first:pt-0">
-              <div className="md:col-span-1">
-                <h2 className="text-base font-semibold text-slate-900">Job Parameters</h2>
-                <p className="text-sm text-slate-500 mt-1">
-                  Choose a registered rule set (a deterministic WASM program identified by its hash) and provide the JSON
-                  input it should run on. The input is canonicalized and hashed so anyone can re-check it later.
-                </p>
-              </div>
-              <div className="md:col-span-2 space-y-6">
-                <div className="space-y-2">
-                  <Label className={LABEL_CLASS}>Rule Set</Label>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left 2 Cols: Form Parameters */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Card 1: Rule Set & Input Payload */}
+              <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs space-y-5">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Code2 className="w-4 h-4 text-blue-600" /> 1. Rule Set & Input Payload
+                  </h2>
+                  <span className="text-[10px] font-mono font-medium text-slate-400">Deterministic WASM</span>
+                </div>
+
+                {/* Rule Set Select */}
+                <div className="space-y-1.5">
+                  <Label className={LABEL_CLASS}>Target WASM Rule Set</Label>
                   {programsLoading && !programs ? (
-                    <div className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-500 shadow-sm">
-                      <Loader2 className="h-4 w-4 animate-spin" /> Loading rule sets…
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-mono text-slate-500">
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-600" /> Querying rule sets…
                     </div>
                   ) : programsError ? (
-                    <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-600">
-                      Failed to load rule sets: {programsError.message}
-                    </div>
-                  ) : !programs || programs.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-500">
-                      No rule sets registered yet
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-mono text-rose-700">
+                      Error loading rule sets: {programsError.message}
                     </div>
                   ) : (
                     <div className="relative">
@@ -338,112 +372,180 @@ function CreateJobForm() {
                         disabled={running}
                         className={SELECT_CLASS}
                       >
-                        {programs.map((p) => (
+                        {programs?.map((p) => (
                           <option key={p.program_hash} value={p.program_hash}>
-                            {p.name}
-                            {p.version ? ` v${p.version}` : ''} ({shortHash(p.program_hash)})
+                            {p.name} {p.version ? `v${p.version}` : ''} — ({shortHash(p.program_hash)})
                           </option>
                         ))}
                       </select>
                       <Chevron />
                     </div>
                   )}
-                  {selected?.description && <p className="text-xs text-slate-500 mt-2">{selected.description}</p>}
-                </div>
-
-                <div className="space-y-2">
-                  <Label className={LABEL_CLASS}>Input (JSON)</Label>
-                  <textarea
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    disabled={running || !selected}
-                    rows={10}
-                    spellCheck={false}
-                    className={`${FIELD_CLASS} font-mono text-sm`}
-                  />
-                  {parseError ? (
-                    <p className="text-xs text-red-600">Invalid JSON: {parseError}</p>
-                  ) : (
-                    <p className="text-xs text-slate-500 break-all">
-                      Input hash: <span className="font-mono">{inputHash ?? '…'}</span>
+                  {selected?.description && (
+                    <p className="text-xs text-slate-500 leading-relaxed pt-1">
+                      {selected.description}
                     </p>
                   )}
                 </div>
 
-                <div className="space-y-2">
-                  <Label className={LABEL_CLASS}>Title (optional)</Label>
+                {/* Input Payload Editor */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className={LABEL_CLASS}>Input JSON Payload</Label>
+                    <button
+                      type="button"
+                      onClick={handleFormatJson}
+                      className="text-[11px] font-mono text-blue-600 hover:text-blue-700 font-semibold transition-colors"
+                    >
+                      Format JSON
+                    </button>
+                  </div>
+                  <textarea
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    disabled={running || !selected}
+                    rows={8}
+                    spellCheck={false}
+                    className={`${FIELD_CLASS} text-xs font-mono bg-slate-50/50`}
+                  />
+                  {parseError ? (
+                    <p className="text-xs font-mono text-rose-600 font-semibold">Syntax error: {parseError}</p>
+                  ) : (
+                    <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 font-mono text-[11px] flex items-center justify-between text-slate-600">
+                      <span className="font-semibold">Canonical SHA-256:</span>
+                      <span className="text-blue-700 truncate max-w-[320px] font-bold">
+                        {inputHash ?? 'Computing…'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Optional Title */}
+                <div className="space-y-1.5">
+                  <Label className={LABEL_CLASS}>Job Title / Label (Optional)</Label>
                   <Input
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     disabled={running}
-                    placeholder="e.g. Loan eligibility check #42"
-                    className="rounded-lg border-slate-300 h-auto px-4 py-2.5 shadow-sm"
+                    placeholder="e.g. Credit evaluation audit job #104"
+                    className="rounded-xl border-slate-300 bg-white text-slate-900 text-xs px-4 py-2.5"
                   />
+                </div>
+              </div>
+
+              {/* Card 2: Bounty & Challenge Window */}
+              <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs space-y-5">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Coins className="w-4 h-4 text-emerald-600" /> 2. Bounty Escrow & Challenge Window
+                  </h2>
+                  <span className="text-[10px] font-mono font-medium text-slate-400">On-Chain Guarantees</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono">
+                  <div className="space-y-1.5">
+                    <Label className={LABEL_CLASS}>Bounty Escrow (SOL)</Label>
+                    <input
+                      type="number"
+                      min="0.001"
+                      step="0.001"
+                      value={bountySol}
+                      onChange={(e) => setBountySol(e.target.value)}
+                      disabled={running}
+                      className={FIELD_CLASS}
+                    />
+                    <p className="text-[10px] text-slate-500">Paid to provider only upon quorum consensus.</p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className={LABEL_CLASS}>Challenge Window</Label>
+                    <div className="relative">
+                      <select
+                        value={deadlineMin}
+                        onChange={(e) => setDeadlineMin(Number(e.target.value))}
+                        disabled={running}
+                        className={SELECT_CLASS}
+                      >
+                        {DEADLINE_OPTIONS.map((m) => (
+                          <option key={m} value={m}>
+                            {m < 60 ? `${m} Minutes` : `${m / 60} Hour${m === 60 ? '' : 's'}`}
+                          </option>
+                        ))}
+                      </select>
+                      <Chevron />
+                    </div>
+                    <p className="text-[10px] text-slate-500">Dispute challenge window enforced on-chain.</p>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-8">
-              <div className="md:col-span-1">
-                <h2 className="text-base font-semibold text-slate-900">Execution Settings</h2>
-                <p className="text-sm text-slate-500 mt-1">
-                  The staked Verity provider network picks up and executes your request off-chain, then 3 independent
-                  verifiers re-execute it and attest on-chain. The bounty is escrowed and paid only for a verified result.
-                </p>
-              </div>
-              <div className="md:col-span-2 space-y-6">
-                <div className="space-y-2">
-                  <Label className={LABEL_CLASS}>Bounty (SOL)</Label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.001"
-                    value={bountySol}
-                    onChange={(e) => setBountySol(e.target.value)}
-                    disabled={running}
-                    className={FIELD_CLASS}
-                  />
-                  {!bountyValid && <p className="text-xs text-red-600">Enter a bounty greater than 0.</p>}
+            {/* Right 1 Col: Execution Summary & Action Card */}
+            <div className="space-y-6">
+              <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs space-y-5">
+                <div className="flex items-center gap-2 text-xs font-mono font-bold uppercase text-slate-700">
+                  <ShieldCheck className="w-4 h-4 text-blue-600" /> Pre-Flight Summary
                 </div>
 
-                <div className="space-y-2">
-                  <Label className={LABEL_CLASS}>Deadline</Label>
-                  <div className="relative">
-                    <select
-                      value={deadlineMin}
-                      onChange={(e) => setDeadlineMin(Number(e.target.value))}
-                      disabled={running}
-                      className={SELECT_CLASS}
-                    >
-                      {DEADLINE_OPTIONS.map((m) => (
-                        <option key={m} value={m}>
-                          {m < 60 ? `${m} minutes` : `${m / 60} hour${m === 60 ? '' : 's'}`}
-                        </option>
-                      ))}
-                    </select>
-                    <Chevron />
+                <div className="space-y-3 font-mono text-xs">
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                    <div className="flex justify-between text-slate-500">
+                      <span>Execution Model:</span>
+                      <span className="text-slate-900 font-semibold">Deterministic WASM</span>
+                    </div>
+                    <div className="flex justify-between text-slate-500">
+                      <span>Fuel Metering:</span>
+                      <span className="text-blue-700 font-bold">50,000,000 max</span>
+                    </div>
+                    <div className="flex justify-between text-slate-500">
+                      <span>Independent Verifiers:</span>
+                      <span className="text-emerald-700 font-bold">3 Node Quorum</span>
+                    </div>
+                    <div className="flex justify-between text-slate-500">
+                      <span>Wallet Commitment:</span>
+                      <span className="text-purple-700 font-bold">Ed25519 Signed</span>
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-500 mt-2">If no verified result is delivered before the deadline, the request expires and the bounty can be reclaimed.</p>
+
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                    <div className="flex justify-between text-slate-500">
+                      <span>Escrowed Bounty:</span>
+                      <span className="text-slate-900 font-bold">{bountySol} SOL</span>
+                    </div>
+                    <div className="flex justify-between text-slate-500">
+                      <span>Solana Network:</span>
+                      <span className="text-emerald-700 font-bold">Devnet</span>
+                    </div>
+                  </div>
                 </div>
 
-                {!walletReady && <p className="text-sm text-amber-700">Connect your wallet (top right)</p>}
-                {step && (
-                  <p className="flex items-center gap-2 text-sm text-slate-600">
-                    <Loader2 className="h-4 w-4 animate-spin" /> {step}
-                  </p>
+                {!walletReady && (
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-mono">
+                    Solana wallet not connected. Please connect Phantom via the top-right header button.
+                  </div>
                 )}
-                {error && <p className="text-sm text-red-600 break-words">{error}</p>}
 
-                <div className="flex justify-end pt-4">
-                  <Button
-                    onClick={onCreate}
-                    disabled={!canSubmit}
-                    className="bg-slate-900 hover:bg-slate-800 text-white font-medium py-2.5 px-6 h-auto rounded-lg shadow-sm transition-colors"
-                  >
-                    {running && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {running ? 'Creating…' : 'Create Job'}
-                  </Button>
-                </div>
+                {step && (
+                  <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-xs font-mono flex items-center gap-2.5">
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-600 shrink-0" />
+                    <span>{step}</span>
+                  </div>
+                )}
+
+                {error && (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-mono break-words">
+                    {error}
+                  </div>
+                )}
+
+                <Button
+                  onClick={onCreate}
+                  disabled={!canSubmit}
+                  className="w-full py-3 h-auto rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider transition shadow-sm shadow-blue-500/20 disabled:opacity-50"
+                >
+                  {running && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {running ? 'Broadcasting to Solana…' : 'Dispatch Computation Job'}
+                </Button>
               </div>
             </div>
           </div>
