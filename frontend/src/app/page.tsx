@@ -9,50 +9,81 @@ import { User, LogOut } from "lucide-react";
 export default function Page() {
   const { user: session, displayName, avatarUrl, signOut } = useAuth();
   useEffect(() => {
-    const scripts = [
-      "/js/jquery.js?site=69d7f44961b88686fd48eee3",
-      "/js/webflow.schunk.38092a41f577771c.js",
-      "/js/webflow-script.js",
-      "/js/gsap.min.js",
-      "/js/scrolltrigger.min.js",
-      "https://unpkg.com/split-type",
-      "https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js",
-      "https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js",
-    ];
+    let cancelled = false;
 
-    scripts.forEach((src) => {
-      const script = document.createElement("script");
-      script.src = src;
-      script.async = false;
-      document.body.appendChild(script);
-    });
+    const loadScript = (src: string): Promise<void> => {
+      return new Promise((resolve) => {
+        if (typeof document === "undefined") return resolve();
+        const existing = document.querySelector(`script[src="${src}"]`);
+        if (existing) return resolve();
 
-    setTimeout(() => {
-      if (
-        (window as any).gsap &&
-        (window as any).SplitType &&
-        (window as any).ScrollTrigger
-      ) {
-        (window as any).gsap.registerPlugin((window as any).ScrollTrigger);
-        const splitTypes = document.querySelectorAll(".scroll-highlight");
-        splitTypes.forEach((char) => {
-          const text = new (window as any).SplitType(char, {
-            types: ["chars", "words"],
-          });
-          (window as any).gsap.from(text.chars, {
-            scrollTrigger: {
-              trigger: char,
-              start: "top 80%",
-              end: "top 20%",
-              scrub: true,
-              markers: false,
-            },
-            opacity: 0.2,
-            stagger: 0.1,
-          });
-        });
+        const script = document.createElement("script");
+        script.src = src;
+        script.async = false;
+        script.onload = () => resolve();
+        script.onerror = () => resolve();
+        document.body.appendChild(script);
+      });
+    };
+
+    async function initScripts() {
+      // Load jQuery and GSAP/ScrollTrigger before Webflow to ensure plugins exist
+      await loadScript("/js/jquery.js?site=69d7f44961b88686fd48eee3");
+      await loadScript("https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js");
+      await loadScript("https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js");
+      await loadScript("https://unpkg.com/split-type");
+
+      try {
+        const w = window as any;
+        if (w.gsap && w.ScrollTrigger) {
+          w.gsap.registerPlugin(w.ScrollTrigger);
+        }
+      } catch (err) {
+        console.warn("GSAP plugin registration error:", err);
       }
-    }, 1000);
+
+      await loadScript("/js/webflow.schunk.38092a41f577771c.js");
+      await loadScript("/js/webflow-script.js");
+
+      if (cancelled) return;
+
+      setTimeout(() => {
+        try {
+          const w = window as any;
+          if (w.gsap && w.ScrollTrigger) {
+            w.gsap.registerPlugin(w.ScrollTrigger);
+          }
+
+          if (w.gsap && w.SplitType && w.ScrollTrigger) {
+            const splitTypes = document.querySelectorAll(".scroll-highlight");
+            splitTypes.forEach((char) => {
+              const text = new w.SplitType(char, {
+                types: ["chars", "words"],
+              });
+              w.gsap.from(text.chars, {
+                scrollTrigger: {
+                  trigger: char,
+                  start: "top 80%",
+                  end: "top 20%",
+                  scrub: true,
+                  markers: false,
+                },
+                opacity: 0.2,
+                stagger: 0.1,
+              });
+            });
+          }
+        } catch (err) {
+          console.warn("Animation init error:", err);
+        }
+      }, 300);
+    }
+
+    initScripts();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (

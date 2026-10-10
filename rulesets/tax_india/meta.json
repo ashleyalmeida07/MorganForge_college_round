@@ -1,0 +1,45 @@
+{
+  "name": "India Income Tax (New Regime FY 2025-26)",
+  "description": "Sec. 115BAC new-regime slabs, Rs 75k standard deduction, 87A rebate with marginal relief, surcharge with marginal relief and 4% cess. Whole rupees.",
+  "version": "1.0.0",
+  "language": "rust",
+  "category": "tax",
+  "input_schema": {
+    "type": "object",
+    "required": [
+      "annual_income_rupees"
+    ],
+    "properties": {
+      "annual_income_rupees": {
+        "type": "integer",
+        "title": "Annual gross income (Rs)",
+        "minimum": 0,
+        "default": 1800000,
+        "maximum": 1000000000000
+      },
+      "salaried": {
+        "type": "boolean",
+        "title": "Salaried (standard deduction applies)",
+        "default": true
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "taxable_income": {
+        "type": "integer"
+      },
+      "total_tax": {
+        "type": "integer"
+      },
+      "slab_breakdown": {
+        "type": "array"
+      }
+    }
+  },
+  "example_input": {
+    "annual_income_rupees": 1800000,
+    "salaried": true
+  }
+}

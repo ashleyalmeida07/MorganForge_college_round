@@ -3,8 +3,13 @@ node_modules/
 out/
 .env*.local
 venv/
+.venv/
 __pycache__/
 *.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .env
 st/*
+securiotemplate/*
 backend/keys/

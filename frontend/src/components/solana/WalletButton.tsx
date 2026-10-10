@@ -9,9 +9,8 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { apiGet, apiPost, type Me } from "@/lib/api";
 import { explorerAddress } from "@/lib/env";
-import { shortKey } from "@/lib/solana";
-
-const toBase64 = (b: Uint8Array) => btoa(String.fromCharCode(...b));
+import { toBase64 } from "@/lib/hash";
+import { shortKey } from "@/lib/utils";
 
 /** Compact wallet connect/link control for the app top bar. */
 export function WalletButton() {

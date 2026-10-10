@@ -1,0 +1,889 @@
+{
+  "address": "A5taiN69gN4EALtyM9X9S7dVMbhA5qo8aejHrfo48mVv",
+  "metadata": {
+    "name": "verity_zk_verifier",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Verity: on-chain Groth16 verification of the payroll rule set, bound to verity_core requests and receipts"
+  },
+  "instructions": [
+    {
+      "name": "initialize",
+      "docs": [
+        "One-time setup by the verity_core config authority."
+      ],
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "core_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                162,
+                247,
+                207,
+                11,
+                211,
+                191,
+                152,
+                212,
+                24,
+                53,
+                142,
+                191,
+                201,
+                226,
+                105,
+                238,
+                72,
+                196,
+                193,
+                197,
+                202,
+                87,
+                134,
+                209,
+                90,
+                5,
+                23,
+                141,
+                158,
+                190,
+                105,
+                42
+              ]
+            }
+          }
+        },
+        {
+          "name": "zk_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  122,
+                  107,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "payroll_program_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_payroll_program_hash",
+      "docs": [
+        "Point the payroll circuit at a rebuilt payroll WASM (new program hash)."
+      ],
+      "discriminator": [
+        204,
+        99,
+        252,
+        196,
+        232,
+        249,
+        210,
+        84
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "zk_config"
+          ]
+        },
+        {
+          "name": "zk_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  122,
+                  107,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "payroll_program_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "verify_payroll",
+      "discriminator": [
+        215,
+        121,
+        7,
+        44,
+        187,
+        165,
+        133,
+        242
+      ],
+      "accounts": [
+        {
+          "name": "prover",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "zk_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  122,
+                  107,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "request",
+          "docs": [
+            "verity_core Request (owner + discriminator checked by Account<>)."
+          ]
+        },
+        {
+          "name": "receipt",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  99,
+                  101,
+                  105,
+                  112,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "request"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                162,
+                247,
+                207,
+                11,
+                211,
+                191,
+                152,
+                212,
+                24,
+                53,
+                142,
+                191,
+                201,
+                226,
+                105,
+                238,
+                72,
+                196,
+                193,
+                197,
+                202,
+                87,
+                134,
+                209,
+                90,
+                5,
+                23,
+                141,
+                158,
+                190,
+                105,
+                42
+              ]
+            }
+          }
+        },
+        {
+          "name": "record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  122,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "request"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "proof_a",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "proof_b",
+          "type": {
+            "array": [
+              "u8",
+              128
+            ]
+          }
+        },
+        {
+          "name": "proof_c",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "salary_cents",
+          "type": "u64"
+        },
+        {
+          "name": "tax_bps",
+          "type": "u64"
+        },
+        {
+          "name": "deductions_cents",
+          "type": "u64"
+        },
+        {
+          "name": "tax_cents",
+          "type": "u64"
+        },
+        {
+          "name": "net_cents",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Config",
+      "discriminator": [
+        155,
+        12,
+        170,
+        224,
+        30,
+        250,
+        204,
+        130
+      ]
+    },
+    {
+      "name": "Receipt",
+      "discriminator": [
+        39,
+        154,
+        73,
+        106,
+        80,
+        102,
+        145,
+        153
+      ]
+    },
+    {
+      "name": "Request",
+      "discriminator": [
+        125,
+        172,
+        150,
+        161,
+        162,
+        115,
+        39,
+        71
+      ]
+    },
+    {
+      "name": "ZkConfig",
+      "discriminator": [
+        181,
+        176,
+        242,
+        167,
+        108,
+        219,
+        13,
+        202
+      ]
+    },
+    {
+      "name": "ZkProofRecord",
+      "discriminator": [
+        204,
+        146,
+        135,
+        64,
+        250,
+        227,
+        31,
+        5
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "ZkVerified",
+      "discriminator": [
+        89,
+        6,
+        25,
+        43,
+        28,
+        190,
+        172,
+        177
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Unauthorized",
+      "msg": "signer is not the verity_core / zk config authority"
+    },
+    {
+      "code": 6001,
+      "name": "WrongProgram",
+      "msg": "request is not for the registered payroll program"
+    },
+    {
+      "code": 6002,
+      "name": "InputMismatch",
+      "msg": "proven input does not hash to the request's input_hash"
+    },
+    {
+      "code": 6003,
+      "name": "ReceiptMismatch",
+      "msg": "receipt does not belong to this request"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidProof",
+      "msg": "Groth16 proof verification failed"
+    }
+  ],
+  "types": [
+    {
+      "name": "Config",
+      "docs": [
+        "seeds: [\"config\"]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "min_provider_stake",
+            "type": "u64"
+          },
+          {
+            "name": "min_dispute_stake",
+            "type": "u64"
+          },
+          {
+            "name": "challenge_window_secs",
+            "type": "i64"
+          },
+          {
+            "name": "required_attestations",
+            "type": "u8"
+          },
+          {
+            "name": "request_count",
+            "type": "u64"
+          },
+          {
+            "name": "verifier_count",
+            "type": "u32"
+          },
+          {
+            "name": "latest_audit_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "audit_root_count",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Receipt",
+      "docs": [
+        "seeds: [\"receipt\", request]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "request",
+            "type": "pubkey"
+          },
+          {
+            "name": "provider",
+            "type": "pubkey"
+          },
+          {
+            "name": "output_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "trace_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "fuel_used",
+            "type": "u64"
+          },
+          {
+            "name": "signature",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          },
+          {
+            "name": "submitted_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Request",
+      "docs": [
+        "seeds: [\"request\", requester, id (u64 LE)] where id = config.request_count at creation."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "requester",
+            "type": "pubkey"
+          },
+          {
+            "name": "program_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "input_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "input_uri_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "bounty",
+            "type": "u64"
+          },
+          {
+            "name": "deadline",
+            "type": "i64"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "RequestStatus"
+              }
+            }
+          },
+          {
+            "name": "provider",
+            "docs": [
+              "Pubkey::default() until claimed."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "receipt_at",
+            "type": "i64"
+          },
+          {
+            "name": "attest_count_match",
+            "type": "u8"
+          },
+          {
+            "name": "attest_count_mismatch",
+            "type": "u8"
+          },
+          {
+            "name": "attest_count_total",
+            "type": "u8"
+          },
+          {
+            "name": "settled",
+            "docs": [
+              "true once the bounty has left the escrow (paid, refunded)."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RequestStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Open"
+          },
+          {
+            "name": "Claimed"
+          },
+          {
+            "name": "AwaitingVerification"
+          },
+          {
+            "name": "Disputed"
+          },
+          {
+            "name": "Verified"
+          },
+          {
+            "name": "Rejected"
+          },
+          {
+            "name": "Expired"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ZkConfig",
+      "docs": [
+        "seeds: [\"zk_config\"]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "payroll_program_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "verified_count",
+            "type": "u64"
+          },
+          {
+            "name": "fraud_count",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ZkProofRecord",
+      "docs": [
+        "seeds: [\"zk\", request]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "request",
+            "type": "pubkey"
+          },
+          {
+            "name": "prover",
+            "type": "pubkey"
+          },
+          {
+            "name": "circuit",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "program_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "input_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "receipt_output_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "proven_output_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "matches_receipt",
+            "type": "bool"
+          },
+          {
+            "name": "tax_cents",
+            "type": "u64"
+          },
+          {
+            "name": "net_cents",
+            "type": "u64"
+          },
+          {
+            "name": "verified_at",
+            "type": "i64"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ZkVerified",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "request",
+            "type": "pubkey"
+          },
+          {
+            "name": "prover",
+            "type": "pubkey"
+          },
+          {
+            "name": "circuit",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "proven_output_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "receipt_output_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "matches_receipt",
+            "type": "bool"
+          }
+        ]
+      }
+    }
+  ]
+}

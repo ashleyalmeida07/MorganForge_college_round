@@ -6,7 +6,9 @@ httpx>=0.27
 python-multipart>=0.0.9
 solana>=0.35,<0.37
 solders>=0.21
-wasmtime>=20
+# Pinned: fuel metering differs between wasmtime releases, and attestations compare fuel_used.
+# Every provider/verifier/CLI must run the same version or honest receipts get rejected.
+wasmtime==49.0.0
 pynacl>=1.5
 base58>=2.1
 supabase>=2.4

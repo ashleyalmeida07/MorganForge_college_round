@@ -1,19 +1,24 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { Loader2, CheckCircle2, ExternalLink } from 'lucide-react';
+import { Loader2, CheckCircle2, ExternalLink, ArrowRight } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { AppShell } from '@/components/ui/efferd-dashboard-2-utils/app-shell';
 
-import { useApi, useVerityProgram } from '@/lib/hooks';
+import { useApi } from '@/lib/hooks';
 import { apiPost, ApiError, type PrepareOut, type Program } from '@/lib/api';
-import { canonicalJson, sha256Hex } from '@/lib/hash';
-import { createRequest, LAMPORTS_PER_SOL, shortKey } from '@/lib/solana';
+import { canonicalJson, concatBytes, fromHex, sha256Hex, toBase64 } from '@/lib/hash';
+import { createRequest, predictRequestPda, LAMPORTS_PER_SOL, useVerityProgram } from '@/lib/solana';
+import { shortKey } from '@/lib/utils';
 import { explorerAddress, explorerTx } from '@/lib/env';
+
+const INPUT_COMMITMENT_DOMAIN = new TextEncoder().encode('VERITY_INPUT_V1');
 
 const SELECT_CLASS =
   'w-full appearance-none rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-shadow';
@@ -53,8 +58,19 @@ interface Success {
 }
 
 export default function CreateJobPage() {
+  // useSearchParams needs a Suspense boundary in the App Router.
+  return (
+    <Suspense fallback={null}>
+      <CreateJobForm />
+    </Suspense>
+  );
+}
+
+function CreateJobForm() {
+  const searchParams = useSearchParams();
+  const requestedProgram = (searchParams.get('program') ?? '').toLowerCase();
   const { data: programs, error: programsError, loading: programsLoading } = useApi<Program[]>('/programs');
-  const { publicKey, connected } = useWallet();
+  const { publicKey, connected, signMessage } = useWallet();
   const verity = useVerityProgram();
 
   const [programHash, setProgramHash] = useState('');
@@ -76,13 +92,14 @@ export default function CreateJobPage() {
     [programs, programHash],
   );
 
-  // Auto-select the first rule set once the list loads.
+  // Auto-select the rule set from ?program=<hash> (from /rulesets), else the first one, once the list loads.
   useEffect(() => {
     if (!programHash && programs && programs.length > 0) {
-      setProgramHash(programs[0].program_hash);
-      setInputText(exampleText(programs[0]));
+      const initial = programs.find((p) => p.program_hash.toLowerCase() === requestedProgram) ?? programs[0];
+      setProgramHash(initial.program_hash);
+      setInputText(exampleText(initial));
     }
-  }, [programs, programHash]);
+  }, [programs, programHash, requestedProgram]);
 
   // Live canonical-JSON hash preview.
   useEffect(() => {
@@ -165,17 +182,46 @@ export default function CreateJobPage() {
         );
       }
 
-      // 3. Sign + send create_request with the connected wallet.
-      setStep('Waiting for wallet signature…');
-      const { requestPda, signature } = await createRequest(verity, {
-        programHash: prep.program_hash_bytes32,
-        inputHash: prep.input_hash_bytes32,
-        inputUriHash: prep.input_uri_hash_bytes32,
-        bountyLamports: Math.round(bountyNum * LAMPORTS_PER_SOL),
-        deadlineUnix: Math.floor(Date.now() / 1000) + deadlineMin * 60,
+      // 3. Sign a requester input commitment: proof of exactly what was asked for,
+      //    independent of trusting the chain or the backend (§4.4 "Plus").
+      if (!signMessage) {
+        throw new Error('This wallet cannot sign messages (required for the input commitment).');
+      }
+      setStep('Predicting request account…');
+      const { request: predictedPda } = await predictRequestPda(verity);
+
+      setStep('Sign input commitment in your wallet…');
+      const commitmentMsg = concatBytes(
+        INPUT_COMMITMENT_DOMAIN,
+        fromHex(prep.program_hash),
+        fromHex(prep.input_hash),
+        fromHex(prep.input_uri_hash),
+      );
+      const commitmentSig = await signMessage(commitmentMsg);
+      await apiPost('/requests/commit-input', {
+        request_pda: predictedPda.toBase58(),
+        requester: publicKey.toBase58(),
+        program_hash: prep.program_hash,
+        input_hash: prep.input_hash,
+        input_uri_hash: prep.input_uri_hash,
+        signature: toBase64(commitmentSig),
       });
 
-      // 4. Confirm with the backend so it indexes and links the request.
+      // 4. Sign + send create_request with the connected wallet, pinned to the same PDA.
+      setStep('Waiting for wallet signature…');
+      const { requestPda, signature } = await createRequest(
+        verity,
+        {
+          programHash: prep.program_hash_bytes32,
+          inputHash: prep.input_hash_bytes32,
+          inputUriHash: prep.input_uri_hash_bytes32,
+          bountyLamports: Math.round(bountyNum * LAMPORTS_PER_SOL),
+          deadlineUnix: Math.floor(Date.now() / 1000) + deadlineMin * 60,
+        },
+        predictedPda,
+      );
+
+      // 5. Confirm with the backend so it indexes and links the request.
       setStep('Confirming with Verity backend…');
       let confirmWarning: string | undefined;
       try {
@@ -229,6 +275,15 @@ export default function CreateJobPage() {
               </div>
             </div>
             <div className="flex flex-wrap gap-4 text-sm">
+              <a href={`/requests/${success.requestPda}`} className="inline-flex items-center gap-1 text-blue-600 hover:underline">
+                View timeline <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+              <Link
+                href={`/requests/${success.requestPda}`}
+                className="inline-flex items-center gap-1 font-semibold text-blue-700 hover:underline"
+              >
+                Track &amp; verify this request <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
               {pdaUrl && (
                 <a href={pdaUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline">
                   View request account <ExternalLink className="h-3.5 w-3.5" />

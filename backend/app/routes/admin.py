@@ -23,8 +23,17 @@ from app.db import (
     set_chaos_flag,
     upload_blob,
 )
-from app.routes.common import call_any, chain_or_none, db_receipt, db_request, input_uri_for, output_uri_for, tx_link
-from app.schemas import BootstrapIn, ChaosIn, TamperIn
+from app.routes.common import (
+    call_any,
+    chain_or_none,
+    chain_read,
+    db_receipt,
+    db_request,
+    input_uri_for,
+    output_uri_for,
+    tx_link,
+)
+from app.schemas import BootstrapIn, ChaosIn, SimulateIn, TamperIn
 from app.utils import canonical, sha256_hex
 
 log = logging.getLogger("verity.routes.admin")
@@ -46,7 +55,8 @@ def _audit(event_type: str, payload: dict[str, Any], user: User, request_pda: st
 @router.get("/chaos")
 async def get_chaos() -> dict[str, Any]:
     flags = await asyncio.to_thread(get_chaos_flags, 0.0)
-    return {"flags": flags, "available": CHAOS_FLAGS}
+    items = [{"name": f, "enabled": bool(flags.get(f, False))} for f in CHAOS_FLAGS]
+    return {"flags": flags, "available": CHAOS_FLAGS, "items": items}
 
 
 @router.post("/chaos")
@@ -57,7 +67,8 @@ async def set_chaos(body: ChaosIn, user: User = Depends(require_admin)) -> dict[
     await asyncio.to_thread(set_chaos_flag, flag, body.enabled)
     await asyncio.to_thread(_audit, "ChaosFlagChanged", {"flag": flag, "enabled": body.enabled, "by": user.id}, user)
     flags = await asyncio.to_thread(get_chaos_flags, 0.0)
-    return {"flags": flags, "available": CHAOS_FLAGS}
+    items = [{"name": f, "enabled": bool(flags.get(f, False))} for f in CHAOS_FLAGS]
+    return {"flags": flags, "available": CHAOS_FLAGS, "items": items}
 
 
 # ------------------------------------------------------------------ tamper
@@ -328,3 +339,102 @@ async def admin_workers() -> dict[str, Any]:
         return {"available": False, "error": str(e)}
     status = await call_any(worker_status)
     return status if isinstance(status, dict) else {"status": status}
+
+
+# ------------------------------------------------------------------ chain config / service health
+
+@router.get("/config")
+async def admin_config() -> dict[str, Any]:
+    """On-chain parameters plus the registered service keypairs.
+
+    Drives the admin panel's quorum / challenge-window / stake readouts and
+    lets the operator confirm the provider and verifier keys are live.
+    """
+    from app.chain import keys
+
+    chain = chain_or_none()
+    if chain is None:
+        raise HTTPException(503, "chain client unavailable")
+
+    try:
+        provider = keys.provider_keypair()
+        verifiers = keys.verifier_keypairs()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(500, f"could not load service keypairs: {e}") from e
+
+    config = await _safe_read(chain.get_config())
+    provider_account = await _safe_read(chain.get_provider(provider.pubkey())) if provider else None
+
+    verifier_records: list[dict[str, Any]] = []
+    for v in verifiers:
+        vpk = v.pubkey()
+        rec = await _safe_read(chain.get_verifier_record(vpk))
+        verifier_records.append({
+            "pubkey": str(vpk),
+            "registered": rec is not None,
+            "active": bool((rec or {}).get("active")),
+            "attestations": int((rec or {}).get("attestations") or 0),
+        })
+
+    chaos = await asyncio.to_thread(get_chaos_flags, 0.0)
+    return {
+        "cluster": settings.cluster,
+        "program_id": settings.program_id,
+        "config": config,
+        "chaos_flags": chaos,
+        "active_chaos": sum(1 for v in chaos.values() if v),
+        "provider": {
+            "pubkey": str(provider.pubkey()) if provider else None,
+            "registered": provider_account is not None,
+            "stake": int((provider_account or {}).get("stake") or 0),
+            "completed": int((provider_account or {}).get("completed") or 0),
+            "slashed": int((provider_account or {}).get("slashed") or 0),
+            "active": bool((provider_account or {}).get("active")) if provider_account else None,
+        },
+        "verifiers": verifier_records,
+    }
+
+
+# ------------------------------------------------------------------ simulations
+
+@router.get("/scenarios")
+async def admin_scenarios() -> dict[str, Any]:
+    """Catalog of one-click adversarial simulations."""
+    from app.simulation import scenario_catalog
+
+    return {"scenarios": scenario_catalog()}
+
+
+@router.post("/simulate", status_code=202)
+async def admin_simulate(body: SimulateIn, user: User = Depends(require_admin)) -> dict[str, Any]:
+    """Start a full end-to-end adversarial simulation and return its id."""
+    from app.simulation import SCENARIOS, start_simulation
+
+    scenario = body.scenario.strip()
+    if scenario not in SCENARIOS:
+        raise HTTPException(400, f"unknown scenario; expected one of {sorted(SCENARIOS)}")
+    try:
+        sim = start_simulation(scenario, fast=body.fast, bounty=body.bounty)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(503, str(e)) from e
+    await asyncio.to_thread(_audit, "SimulationStarted", {"scenario": scenario, "sim_id": sim.id, "by": user.id}, user)
+    return sim.snapshot()
+
+
+@router.get("/simulate")
+async def admin_simulations(limit: int = 10) -> dict[str, Any]:
+    from app.simulation import list_simulations
+
+    return {"simulations": list_simulations(max(1, min(limit, 25)))}
+
+
+@router.get("/simulate/{sim_id}")
+async def admin_simulation(sim_id: str) -> dict[str, Any]:
+    from app.simulation import get_simulation
+
+    sim = get_simulation(sim_id)
+    if sim is None:
+        raise HTTPException(404, "simulation not found")
+    return sim

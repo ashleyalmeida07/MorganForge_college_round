@@ -1,6 +1,6 @@
-// verity_core program client for wallet-signed transactions (requester / challenger / provider staking).
+import { useMemo } from "react";
 import { AnchorProvider, BN, Program, type Idl } from "@coral-xyz/anchor";
-import type { AnchorWallet } from "@solana/wallet-adapter-react";
+import { useAnchorWallet, useConnection, type AnchorWallet } from "@solana/wallet-adapter-react";
 import { LAMPORTS_PER_SOL, PublicKey, type Connection } from "@solana/web3.js";
 
 import { env } from "@/lib/env";
@@ -43,6 +43,12 @@ export function getProgram(connection: Connection, wallet: AnchorWallet): Progra
   return new Program(idl, provider) as unknown as Program<VerityCore>;
 }
 
+export function useVerityProgram() {
+  const { connection } = useConnection();
+  const wallet = useAnchorWallet();
+  return useMemo(() => (wallet ? getProgram(connection, wallet) : null), [connection, wallet]);
+}
+
 export async function fetchConfig(program: Program<VerityCore>) {
   return program.account.config.fetchNullable(configPda());
 }
@@ -57,12 +63,24 @@ export interface CreateRequestArgs {
   deadlineUnix: number;
 }
 
-/** Signs + sends create_request with the connected wallet. Returns the request PDA and tx signature. */
-export async function createRequest(program: Program<VerityCore>, args: CreateRequestArgs) {
+/** Predicts the PDA `create_request` will land on, from the current on-chain request counter. */
+export async function predictRequestPda(program: Program<VerityCore>) {
   const requester = program.provider.publicKey!;
   const config = await fetchConfig(program);
   if (!config) throw new Error("verity_core config is not initialized on this cluster");
-  const request = requestPda(requester, config.requestCount);
+  return { requester, request: requestPda(requester, config.requestCount) };
+}
+
+/** Signs + sends create_request with the connected wallet. Returns the request PDA and tx signature.
+ *  Pass `request` (from `predictRequestPda`) to pin it to the same PDA used for a prior signed
+ *  input commitment, instead of re-deriving it (which could drift if the request counter moved). */
+export async function createRequest(
+  program: Program<VerityCore>,
+  args: CreateRequestArgs,
+  request?: PublicKey,
+) {
+  const requester = program.provider.publicKey!;
+  if (!request) ({ request } = await predictRequestPda(program));
 
   const sig = await program.methods
     .createRequest(

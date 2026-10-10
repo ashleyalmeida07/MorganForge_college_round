@@ -1,0 +1,59 @@
+{
+  "name": "Credit Risk Assessment Model",
+  "description": "Rule-based 300-850 credit score from debt-to-income, delinquencies and credit history length, with a risk tier.",
+  "version": "1.0.0",
+  "language": "rust",
+  "category": "risk",
+  "input_schema": {
+    "type": "object",
+    "required": [
+      "annual_income_cents",
+      "total_debt_cents",
+      "credit_history_months",
+      "delinquencies"
+    ],
+    "properties": {
+      "annual_income_cents": {
+        "type": "integer",
+        "title": "Annual income (cents)",
+        "minimum": 0,
+        "default": 8500000
+      },
+      "total_debt_cents": {
+        "type": "integer",
+        "title": "Total outstanding debt (cents)",
+        "minimum": 0,
+        "default": 2400000
+      },
+      "credit_history_months": {
+        "type": "integer",
+        "title": "Credit history (months)",
+        "minimum": 0,
+        "default": 48
+      },
+      "delinquencies": {
+        "type": "integer",
+        "title": "Past delinquencies",
+        "minimum": 0,
+        "default": 0
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "final_score": {
+        "type": "integer"
+      },
+      "risk_tier": {
+        "type": "string"
+      }
+    }
+  },
+  "example_input": {
+    "annual_income_cents": 8500000,
+    "total_debt_cents": 2400000,
+    "credit_history_months": 48,
+    "delinquencies": 0
+  }
+}

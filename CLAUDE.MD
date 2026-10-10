@@ -1,0 +1,1 @@
+Always refer to [text](Implementation_plan.md) and for blockchain related changes refer [text](programs/verity_core/DEPLOYMENT.md)

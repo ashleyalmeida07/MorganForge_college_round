@@ -5,15 +5,19 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=(".env.local", ".env"), env_file_encoding="utf-8", extra="ignore"
+    )
 
     # Solana
     solana_rpc_url: str = "https://api.devnet.solana.com"
     program_id: str = "ByADChPce9hwCuSak9hFwiiCyndYGj7dkYypm4XYEJL1"
+    zk_program_id: str = "A5taiN69gN4EALtyM9X9S7dVMbhA5qo8aejHrfo48mVv"
     cluster: str = "devnet"
     provider_keypair_json: str = ""
     verifier_keypairs_json: str = ""
     admin_keypair_json: str = ""
+    requester_keypair_json: str = ""
 
     # Supabase
     supabase_url: str = ""

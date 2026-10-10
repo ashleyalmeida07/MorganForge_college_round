@@ -28,7 +28,7 @@ def _json_bytes(obj: Any) -> bytes:
 
 
 def _verify_md(pda: str, exp: dict[str, Any], uris: dict[str, Any], integrity: dict[str, Any],
-               files: dict[str, str], tx_sigs: list[str]) -> str:
+               files: dict[str, str], tx_sigs: list[str], commitment: dict[str, Any] | None) -> str:
     cluster = settings.cluster
 
     def v(x: Any) -> str:
@@ -71,6 +71,7 @@ def _verify_md(pda: str, exp: dict[str, Any], uris: dict[str, Any], integrity: d
         f"| input URI hash | {integrity.get('input_uri', {}).get('status')} |",
         f"| output.json hash | {integrity.get('output', {}).get('status')} |",
         f"| receipt signature | {integrity.get('receipt_signature', {}).get('status')} |",
+        f"| requester input commitment | {integrity.get('input_commitment', {}).get('status')} |",
         "",
         "Do not trust this table — re-run the checks below yourself.",
         "",
@@ -107,16 +108,31 @@ def _verify_md(pda: str, exp: dict[str, Any], uris: dict[str, Any], integrity: d
         "p = ex['alloc'](st, len(inp)); mem.write(st, inp, p)",
         "o = ex['compute'](st, p, len(inp))",
         "n = int.from_bytes(mem.read(st, o, o + 4), 'little'); out = bytes(mem.read(st, o + 4, o + 4 + n))",
-        "fuel = FUEL - st.get_fuel()",
-        "print('output_hash', hashlib.sha256(out).hexdigest())",
+        "fuel = FUEL - st.get_fuel()   # read BEFORE calling trace()",
+        "print('output_hash', hashlib.sha256(out).hexdigest(), 'fuel_used', fuel)",
+        "# TRACE_V2: Merkle root over [input, checkpoints..., output]",
+        "cps = []",
+        "if 'trace' in [e.name for e in wasmtime.Module(eng, wasm).exports]:",
+        "    t = ex['trace'](st); tn = int.from_bytes(mem.read(st, t, t + 4), 'little')",
+        "    cps = [l for l in bytes(mem.read(st, t + 4, t + 4 + tn)).split(b'\n') if l]",
         "h = lambda b: hashlib.sha256(b).digest()",
-        "print('trace_root', hashlib.sha256(b'TRACE_V1' + h(inp) + h(out) + fuel.to_bytes(8,'little')).hexdigest())",
+        "steps = [inp, *cps, out]",
+        "lvl = [h(b'VERITY_TRACE_LEAF_V2' + i.to_bytes(4, 'little') + h(s)) for i, s in enumerate(steps)]",
+        "n_leaves = len(lvl)",
+        "while len(lvl) > 1:",
+        "    lvl = [h(b'\x01' + lvl[i] + lvl[i + 1]) for i in range(0, len(lvl) - 1, 2)] + ([lvl[-1]] if len(lvl) % 2 else [])",
+        "print('trace_root', h(b'VERITY_TRACE_V2' + n_leaves.to_bytes(4, 'little') + lvl[0]).hex())",
         "```",
         "",
-        "Browsers can do the same with `WebAssembly.instantiate(wasm, {})` (fuel is not metered there, so",
-        "compare `output_hash` only).",
+        "`trace.json` is the provider's published trace: every step's hash and Merkle leaf, plus the",
+        "checkpoint data. Comparing its leaves with your own run pinpoints the first divergent step.",
         "",
-        "## 6. Re-check the provider's receipt signature",
+        "Browsers can do the same with `WebAssembly.instantiate(wasm, {})` (fuel is not metered there, so",
+        "compare `output_hash` and `trace_root`; fuel is compared by the on-chain verifiers).",
+        "",
+        "## 6. Re-check signatures",
+        "",
+        "### 6.1 Provider's receipt signature",
         "",
         "The provider signs `b\"VERITY_RECEIPT_V1\" + request_pda(32 bytes) + program_hash(32) + input_hash(32)",
         "+ output_hash(32) + trace_root(32) + fuel_used(u64 little-endian)` with its Ed25519 key.",
@@ -131,6 +147,21 @@ def _verify_md(pda: str, exp: dict[str, Any], uris: dict[str, Any], integrity: d
         "```",
         "",
         "The same check was enforced on-chain through the Ed25519 precompile when the receipt was submitted.",
+        "",
+        "### 6.2 Requester's input commitment (off-chain, see `input_commitment.json`)",
+        "",
+        "Before `create_request` was ever sent, the requester's wallet signed",
+        "`b\"VERITY_INPUT_V1\" + program_hash(32) + input_hash(32) + input_uri_hash(32)` — proof of exactly what",
+        "was asked for, independent of reading the chain.",
+        "",
+        "```python",
+        "import base58, nacl.signing",
+        f"msg = (b'VERITY_INPUT_V1' + bytes.fromhex('{v((commitment or {}).get('program_hash'))}')",
+        f"       + bytes.fromhex('{v((commitment or {}).get('input_hash'))}')",
+        f"       + bytes.fromhex('{v((commitment or {}).get('input_uri_hash'))}'))",
+        f"nacl.signing.VerifyKey(base58.b58decode('{v((commitment or {}).get('requester_pubkey'))}'))"
+        f".verify(msg, base58.b58decode('{v((commitment or {}).get('signature'))}'))",
+        "```",
         "",
         "## 7. Re-check the hash-chained audit log",
         "",
@@ -167,10 +198,11 @@ async def build_evidence_zip(request_pda: str) -> tuple[bytes, str] | None:
     exp, uris = expected_hashes(b), blob_uris(b)
 
     has_receipt = bool(b.get("chain_receipt") or b.get("receipt"))
-    (wasm, _), (inp, _), (out, _), (src, _), audit_rows, integrity = await asyncio.gather(
+    (wasm, _), (inp, _), (out, _), (trace, _), (src, _), audit_rows, integrity = await asyncio.gather(
         fetch_blob(uris["wasm"]),
         fetch_blob(uris["input"]),
         fetch_blob(uris["output"]) if has_receipt else asyncio.sleep(0, result=(None, None)),
+        fetch_blob(uris["trace"]) if has_receipt else asyncio.sleep(0, result=(None, None)),
         fetch_blob(uris["source"]) if uris.get("source") else asyncio.sleep(0, result=(None, None)),
         asyncio.to_thread(db_audit_rows, pda, 5000),
         compute_integrity(b),
@@ -192,10 +224,13 @@ async def build_evidence_zip(request_pda: str) -> tuple[bytes, str] | None:
         entries["input.json"] = inp
     if out is not None:
         entries["output.json"] = out
+    if trace is not None:
+        entries["trace.json"] = trace
     entries["receipt.json"] = _json_bytes({"chain": b.get("chain_receipt"), "db": b.get("receipt")})
     entries["attestations.json"] = _json_bytes(b.get("attestations") or [])
     entries["dispute.json"] = _json_bytes({"chain": b.get("chain_dispute"), "db": b.get("dispute")})
     entries["request.json"] = _json_bytes({"chain": b.get("chain"), "db": b.get("row")})
+    entries["input_commitment.json"] = _json_bytes(b.get("input_commitment"))
     entries["program.json"] = _json_bytes(decorate_program(b.get("program")))
     entries["timeline.json"] = _json_bytes(timeline)
     entries["audit_log.json"] = _json_bytes(audit_rows)
@@ -206,7 +241,9 @@ async def build_evidence_zip(request_pda: str) -> tuple[bytes, str] | None:
     )
 
     digests = {name: sha256_hex(data) for name, data in entries.items()}
-    entries["VERIFY.md"] = _verify_md(pda, exp, uris, integrity, digests, tx_sigs).encode("utf-8")
+    entries["VERIFY.md"] = _verify_md(pda, exp, uris, integrity, digests, tx_sigs, b.get("input_commitment")).encode(
+        "utf-8"
+    )
     manifest = {
         "request_pda": pda,
         "program_id": settings.program_id,

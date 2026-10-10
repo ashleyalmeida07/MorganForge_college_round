@@ -1,19 +1,22 @@
 "use client";
 
 import React from 'react';
-import { 
-  LayoutDashboard, 
-  BarChart, 
-  FolderGit2, 
-  Users, 
-  HelpCircle, 
-  BookOpen, 
-  Send, 
+import {
+  LayoutDashboard,
+  BarChart,
+  FolderGit2,
+  Users,
+  HelpCircle,
+  BookOpen,
+  Send,
   Bell,
   Sidebar,
   Home,
   LogOut,
-  User as UserIcon
+  User as UserIcon,
+  ShieldAlert,
+  Activity,
+  Boxes
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -25,6 +28,8 @@ const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/create-job', label: 'Create Job', icon: BarChart },
   { href: '/provider', label: 'Providers', icon: FolderGit2 },
+  { href: '/activity', label: 'Activity', icon: Activity },
+  { href: '/rulesets', label: 'Rule Sets', icon: Boxes },
 ];
 
 const ACTIVE = 'w-full justify-start h-9 px-3 text-sm bg-slate-100 text-slate-900 font-medium rounded-md hover:bg-slate-200';
@@ -65,6 +70,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </Link>
                 );
               })}
+              <Link href="/admin">
+                <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md">
+                  <ShieldAlert className="mr-3 h-4 w-4 text-red-500" />
+                  Chaos & Admin
+                </Button>
+              </Link>
             </div>
           </div>
           <div>

@@ -7,16 +7,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CheckCircle2, XCircle, Copy, Loader2, ExternalLink } from 'lucide-react';
 import { AppShell } from '@/components/ui/efferd-dashboard-2-utils/app-shell';
-import { useApi, useVerityProgram } from '@/lib/hooks';
+import { useApi } from '@/lib/hooks';
 import type { Health, Provider } from '@/lib/api';
 import {
   fetchConfig,
-  lamportsToSol,
   LAMPORTS_PER_SOL,
   providerPda,
   registerAndStakeProvider,
-  shortKey,
+  useVerityProgram,
 } from '@/lib/solana';
+import { shortKey, lamportsToSol } from '@/lib/utils';
 import { env, explorerAddress, explorerTx } from '@/lib/env';
 
 interface ProviderAccountView {

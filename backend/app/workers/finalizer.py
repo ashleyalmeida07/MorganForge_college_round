@@ -157,6 +157,21 @@ async def _handle_awaiting(
                     stats["disputes_opened"] += 1
                     logger.info("opened dispute on %s (claimed %s, support %d/%d, tx %s)",
                                 pda, claimed_hex, support, quorum, sig)
+                    try:
+                        from app.db import upsert
+                        from app.utils import utcnow_iso
+                        await asyncio.to_thread(
+                            upsert, "disputes", {
+                                "request_pda": pda,
+                                "challenger": str(challenger.pubkey()),
+                                "claimed_output_hash": claimed_hex,
+                                "status": "Open",
+                                "open_tx": sig,
+                                "opened_at": utcnow_iso(),
+                            }, "request_pda"
+                        )
+                    except Exception as e:
+                        logger.warning("failed to upsert dispute for %s: %s", pda, e)
                     await safe_sync_request(pda, sig)
                     return
             else:
@@ -199,9 +214,22 @@ async def _handle_disputed(
     sig = await chain.resolve_dispute(payer, pda)
     stats["resolved"] += 1
     logger.info("resolved dispute on %s (support %d/%d, tx %s)", pda, support, quorum, sig)
+    new_status = "ChallengerWon" if support >= quorum else "ProviderWon"
+    try:
+        from app.db import table
+        from app.utils import utcnow_iso
+        await asyncio.to_thread(
+            lambda: table("disputes")
+            .update({"status": new_status, "resolve_tx": sig, "resolved_at": utcnow_iso()})
+            .eq("request_pda", pda)
+            .execute()
+        )
+    except Exception as e:
+        logger.warning("failed to update dispute row for %s: %s", pda, e)
     await safe_sync_request(pda, sig)
     await safe_sync_provider(req.get("provider"))
     _trigger_explanation(pda)
+
 
 
 def _trigger_explanation(pda: str) -> None:

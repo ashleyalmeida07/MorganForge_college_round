@@ -1,0 +1,27 @@
+[workspace]
+members = [
+    "verity_abi",
+    "payroll",
+    "loan_amortization",
+    "tax_india",
+    "stats_outliers",
+    "credit_risk",
+    "ml_inference",
+]
+resolver = "2"
+
+[workspace.dependencies]
+# NOTE: never enable serde_json's `preserve_order` feature anywhere in this workspace:
+# canonical output relies on serde_json::Map being a BTreeMap (sorted keys).
+serde = { version = "1.0", default-features = false, features = ["derive", "std"] }
+serde_json = { version = "1.0", default-features = false, features = ["std"] }
+verity_abi = { path = "verity_abi" }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+overflow-checks = true
+strip = true
+debug = false

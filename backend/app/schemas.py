@@ -76,6 +76,22 @@ class ConfirmRequestIn(BaseModel):
     input_ipfs_cid: str | None = Field(default=None, max_length=120)
 
 
+class InputCommitmentIn(BaseModel):
+    """Requester-signed proof that this exact (program_hash, input_hash) pair was authorized (§4.4)."""
+
+    request_pda: str = Field(..., min_length=32, max_length=44, description="Predicted request PDA")
+    requester: str = Field(..., min_length=32, max_length=44, description="base58 Solana pubkey, the signer")
+    program_hash: str
+    input_hash: str
+    input_uri_hash: str
+    signature: str = Field(..., min_length=40, description="ed25519 signature, base58 or base64")
+
+    @field_validator("program_hash", "input_hash", "input_uri_hash")
+    @classmethod
+    def _check_hex64(cls, v: str) -> str:
+        return _norm_hex64(v)
+
+
 # ------------------------------------------------------------------ disputes
 
 class DisputePrepareIn(BaseModel):
@@ -114,6 +130,12 @@ class ChaosIn(BaseModel):
 class TamperIn(BaseModel):
     request_pda: str = Field(..., min_length=32, max_length=44)
     target: Literal["input", "output"]
+
+
+class SimulateIn(BaseModel):
+    scenario: str = Field(..., description="Scenario id from GET /admin/scenarios")
+    fast: bool = Field(default=True, description="Temporarily shorten the challenge window for a fast demo")
+    bounty: int = Field(default=10_000_000, ge=1_000_000, le=1_000_000_000)
 
 
 class BootstrapIn(BaseModel):

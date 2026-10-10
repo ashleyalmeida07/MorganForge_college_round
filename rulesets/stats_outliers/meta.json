@@ -1,0 +1,76 @@
+{
+  "name": "Descriptive Statistics + Outliers",
+  "description": "Mean, population variance, stddev, quartiles (linear interpolation) and IQR outliers over integer data, in exact fixed-point milli units.",
+  "version": "1.0.0",
+  "language": "rust",
+  "category": "analytics",
+  "input_schema": {
+    "type": "object",
+    "required": [
+      "values"
+    ],
+    "properties": {
+      "values": {
+        "type": "array",
+        "title": "Values (integers)",
+        "items": {
+          "type": "integer"
+        },
+        "minItems": 1,
+        "maxItems": 20000,
+        "default": [
+          12,
+          15,
+          14,
+          10,
+          18,
+          16,
+          13,
+          95,
+          11,
+          17,
+          14,
+          15,
+          -40,
+          16,
+          13,
+          12
+        ]
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "mean_milli": {
+        "type": "integer"
+      },
+      "median_milli": {
+        "type": "integer"
+      },
+      "outliers": {
+        "type": "array"
+      }
+    }
+  },
+  "example_input": {
+    "values": [
+      12,
+      15,
+      14,
+      10,
+      18,
+      16,
+      13,
+      95,
+      11,
+      17,
+      14,
+      15,
+      -40,
+      16,
+      13,
+      12
+    ]
+  }
+}

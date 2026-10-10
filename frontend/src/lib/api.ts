@@ -145,6 +145,66 @@ export interface Me {
   is_admin: boolean;
 }
 
+export interface AuditLogRow {
+  seq: number;
+  event_type: string;
+  request_pda: string | null;
+  actor: string | null;
+  payload: Record<string, unknown>;
+  tx_sig: string | null;
+  slot: number | null;
+  prev_hash: string;
+  row_hash: string;
+  anchored_tx: string | null;
+  created_at: string;
+  explorer?: string | null;
+  request_explorer?: string | null;
+  anchored_explorer?: string | null;
+}
+
+
+export interface AuditVerifyOut {
+  ok: boolean;
+  checked: number;
+  first_bad_seq: number | null;
+  head: string | null;
+  onchain: { latest_audit_root: string | null; audit_root_count: number | null; available: boolean };
+  anchored_row: { seq: number; row_hash: string; anchored_tx: string; created_at: string; explorer?: string | null } | null;
+  root_row: { seq: number; row_hash: string; anchored_tx: string; created_at: string; explorer?: string | null } | null;
+  anchor_matches: boolean | null;
+  anchor_status: "not_anchored" | "root_not_found_in_db" | "ok";
+  ok_overall: boolean;
+}
+
+export interface TimelineItem {
+  seq: number | null;
+  event_type: string;
+  at: string | null;
+  tx_sig: string | null;
+  slot: number | null;
+  explorer: string | null;
+  actor: string | null;
+  payload: Record<string, unknown>;
+  source: string;
+}
+
+export interface RequestDetail {
+  request_pda: string;
+  status: RequestStatus;
+  is_terminal: boolean;
+  request: (RequestRow & { explorer?: string | null; create_tx_explorer?: string | null }) | null;
+  program: Program | null;
+  receipt: Record<string, unknown> | null;
+  attestations: Record<string, unknown>[];
+  dispute: Record<string, unknown> | null;
+  timeline: TimelineItem[];
+  integrity: { overall: string; [k: string]: unknown } | null;
+  challenge: { window_secs: number; ends_at: string; seconds_remaining: number } | null;
+  links: { request?: string | null; requester?: string | null; provider?: string | null; program?: string | null };
+  cluster: string;
+  program_id: string;
+}
+
 export interface Health {
   ok: boolean;
   time: string;
@@ -152,3 +212,134 @@ export interface Health {
   cluster: string;
   worker_status?: unknown;
 }
+
+export interface DisputePrepareOut {
+  program_id: string;
+  cluster: string;
+  request_pda: string;
+  receipt_pda: string;
+  dispute_pda: string;
+  config_pda: string;
+  min_dispute_stake: number | null;
+  claimed_output_hash: string;
+  claimed_output_hash_bytes32: number[];
+  receipt_output_hash: string | null;
+  request_status: string;
+  warnings: string[];
+}
+
+export interface DisputeRow {
+  request_pda: string;
+  challenger?: string;
+  challenger_pubkey?: string;
+  claimed_output_hash: string;
+  status: "Open" | "ChallengerWon" | "ProviderWon";
+  stake_lamports?: number | null;
+  open_tx?: string | null;
+  resolve_tx?: string | null;
+  opened_at: string;
+  resolved_at?: string | null;
+  open_explorer?: string | null;
+  resolve_explorer?: string | null;
+  request_explorer?: string | null;
+  challenger_explorer?: string | null;
+  provider_explorer?: string | null;
+  request?: RequestRow | null;
+  program_name?: string | null;
+  // Resolution evidence (see backend /disputes).
+  receipt_output_hash?: string | null;
+  provider_pubkey?: string | null;
+  support_count: number;
+  dissent_count: number;
+  attestation_total: number;
+  supporting_verifiers?: string[];
+  required_attestations?: number | null;
+  challenge_window_secs?: number | null;
+  window_ends_at?: string | null;
+  seconds_remaining?: number | null;
+  window_expired?: boolean | null;
+  challenger_wins_now?: boolean;
+}
+
+export interface AdminVerifier {
+  pubkey: string;
+  registered: boolean;
+  active: boolean;
+  attestations: number;
+}
+
+export interface AdminConfig {
+  cluster: string;
+  program_id: string;
+  config: {
+    authority: string;
+    min_provider_stake: number;
+    min_dispute_stake: number;
+    challenge_window_secs: number;
+    required_attestations: number;
+    request_count: number;
+    verifier_count: number;
+    latest_audit_root?: string | null;
+    audit_root_count?: number;
+    pda?: string;
+  } | null;
+  chaos_flags: Record<string, boolean>;
+  active_chaos: number;
+  provider: {
+    pubkey: string | null;
+    registered: boolean;
+    stake: number;
+    completed: number;
+    slashed: number;
+    active: boolean | null;
+  };
+  verifiers: AdminVerifier[];
+}
+
+export interface SimStep {
+  seq: number;
+  t: number;
+  ts: string;
+  level: "info" | "warn" | "error" | "ok" | "chain" | "exec";
+  phase: string;
+  msg: string;
+  tx?: string;
+  data?: unknown;
+}
+
+export interface SimulationResult {
+  pda?: string;
+  create_sig?: string;
+  detected?: boolean;
+  status?: string;
+  challenge_window_secs?: number;
+  required_attestations?: number;
+  receipt_at?: string;
+  attestations?: number;
+  slashed?: boolean;
+  [key: string]: unknown;
+}
+
+export interface SimulationDetail {
+  id: string;
+  scenario: string;
+  label: string;
+  status: "running" | "done" | "failed" | "aborted";
+  started_at: string;
+  finished_at?: string | null;
+  elapsed_s: number;
+  steps: SimStep[];
+  result: SimulationResult;
+  error?: string | null;
+}
+
+export interface ScenarioMeta {
+  id: string;
+  label: string;
+  desc: string;
+  expect: string[];
+  detected: boolean;
+  severity: "critical" | "high" | "medium" | "info";
+  flags: string[];
+}
+

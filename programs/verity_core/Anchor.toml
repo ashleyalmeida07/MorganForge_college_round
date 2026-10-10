@@ -7,9 +7,11 @@ skip-lint = false
 
 [programs.localnet]
 verity_core = "ByADChPce9hwCuSak9hFwiiCyndYGj7dkYypm4XYEJL1"
+verity_zk_verifier = "A5taiN69gN4EALtyM9X9S7dVMbhA5qo8aejHrfo48mVv"
 
 [programs.devnet]
 verity_core = "ByADChPce9hwCuSak9hFwiiCyndYGj7dkYypm4XYEJL1"
+verity_zk_verifier = "A5taiN69gN4EALtyM9X9S7dVMbhA5qo8aejHrfo48mVv"
 
 [provider]
 cluster = "devnet"

@@ -4,9 +4,11 @@ Rule-set ABI (see Implementation_plan.md section 9.1):
     exports  memory
              alloc(len: i32) -> i32
              compute(ptr: i32, len: i32) -> i32   # pointer to [u32 LE len][output bytes]
+             trace() -> i32                       # optional: [u32 LE len][NDJSON checkpoints]
     imports  none
 
-trace_root = sha256(b"TRACE_V1" + sha256(input) + sha256(output) + fuel_used.to_bytes(8, "little"))
+trace_root = TRACE_V2 Merkle root over [input, checkpoints..., output] (see app.engine.trace).
+fuel_used is committed separately in the receipt.
 
 The wasmtime Python API changed across releases (fuel: ``add_fuel``/``fuel_consumed``
 vs ``set_fuel``/``get_fuel``; memory: ``data_ptr`` vs ``read``/``write``), so every
@@ -26,14 +28,15 @@ from typing import Any
 import wasmtime
 
 from app.config import settings
+from app.engine import trace as tracing
 
 logger = logging.getLogger("verity.engine")
 
-TRACE_DOMAIN = b"TRACE_V1"
 MAX_OUTPUT_BYTES = 4 * 1024 * 1024          # 4 MB output cap
 MAX_INPUT_BYTES = 8 * 1024 * 1024           # refuse absurd inputs before touching the VM
 MAX_MEMORY_BYTES = 256 * 1024 * 1024        # linear-memory cap per execution (if supported)
 REQUIRED_EXPORTS = ("memory", "alloc", "compute")
+MAX_TRACE_BYTES = 4 * 1024 * 1024
 _MODULE_CACHE_SIZE = 16
 _U32 = 0xFFFFFFFF
 
@@ -60,6 +63,8 @@ class ExecResult:
     output_hash: bytes
     trace_root: bytes
     fuel_used: int
+    input_bytes: bytes = b""
+    checkpoints: tuple[bytes, ...] = ()
 
     @property
     def output_hash_hex(self) -> str:
@@ -69,6 +74,16 @@ class ExecResult:
     def trace_root_hex(self) -> str:
         return self.trace_root.hex()
 
+    @property
+    def trace_leaves(self) -> list[bytes]:
+        return tracing.leaves_of(tracing.steps_of(self.input_bytes, list(self.checkpoints), self.output_bytes))
+
+    def trace_document(self, request_pda: str | None = None, program_hash: str | None = None) -> dict:
+        return tracing.trace_document(
+            self.input_bytes, list(self.checkpoints), self.output_bytes,
+            request_pda=request_pda, program_hash=program_hash,
+        )
+
 
 # ---------------------------------------------------------------- hashing
 
@@ -77,13 +92,8 @@ def _sha256(b: bytes) -> bytes:
     return hashlib.sha256(b).digest()
 
 
-def compute_trace_root(input_bytes: bytes, output_bytes: bytes, fuel_used: int) -> bytes:
-    return _sha256(
-        TRACE_DOMAIN
-        + _sha256(input_bytes)
-        + _sha256(output_bytes)
-        + int(fuel_used).to_bytes(8, "little")
-    )
+def compute_trace_root(input_bytes: bytes, output_bytes: bytes, checkpoints: list[bytes] | tuple = ()) -> bytes:
+    return tracing.trace_root(input_bytes, list(checkpoints), output_bytes)
 
 
 # ---------------------------------------------------------------- engine / module cache
@@ -172,6 +182,11 @@ def _check_abi(imports: list[str], exports: list[str], types: dict[str, Any]) ->
                 f"export '{name}' has signature ({arity[0]} params -> {arity[1]} results), "
                 f"expected ({want[0]} -> {want[1]})"
             )
+    if "trace" in types:
+        t = types["trace"]
+        arity = _func_arity(t) if isinstance(t, wasmtime.FuncType) else None
+        if not isinstance(t, wasmtime.FuncType) or (arity is not None and arity != (0, 1)):
+            raise ExecutionError("optional export 'trace' must be a function () -> i32")
 
 
 def validate_module(wasm_bytes: bytes) -> dict:
@@ -321,7 +336,15 @@ def run(
         if out_len > MAX_OUTPUT_BYTES:
             raise ExecutionError(f"output too large ({out_len} bytes > {MAX_OUTPUT_BYTES})")
         output_bytes = _mem_read(memory, store, out_ptr + 4, out_len)
-        fuel_used = _fuel_used(store, limit)
+        fuel_used = _fuel_used(store, limit)  # fuel of compute only; trace() is bookkeeping
+
+        checkpoints: list[bytes] = []
+        if "trace" in exports:
+            tr_ptr = int(ex["trace"](store)) & _U32
+            tr_len = int.from_bytes(_mem_read(memory, store, tr_ptr, 4), "little")
+            if tr_len > MAX_TRACE_BYTES:
+                raise ExecutionError(f"trace too large ({tr_len} bytes > {MAX_TRACE_BYTES})")
+            checkpoints = tracing.split_checkpoints(_mem_read(memory, store, tr_ptr + 4, tr_len))
     except ExecutionError:
         raise
     except (wasmtime.Trap, wasmtime.WasmtimeError) as e:
@@ -342,6 +365,8 @@ def run(
         output_bytes=output_bytes,
         output=output,
         output_hash=_sha256(output_bytes),
-        trace_root=compute_trace_root(input_bytes, output_bytes, fuel_used),
+        trace_root=compute_trace_root(input_bytes, output_bytes, checkpoints),
         fuel_used=fuel_used,
+        input_bytes=input_bytes,
+        checkpoints=tuple(checkpoints),
     )

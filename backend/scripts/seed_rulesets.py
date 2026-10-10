@@ -129,8 +129,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Seed WASM rule sets into Verity")
     ap.add_argument("--dir", default=str(REPO_ROOT / "rulesets"), help="rulesets directory")
     ap.add_argument("--only", action="append", default=None, help="only this crate dir name (repeatable)")
-    ap.add_argument("--skip", action="append", default=["template", "target"],
-                    help="crate dir names to skip (default: template, target)")
+    ap.add_argument("--skip", action="append", default=["template", "target", "verity_abi"],
+                    help="crate dir names to skip (default: template, target, verity_abi)")
     ap.add_argument("--dry-run", action="store_true", help="validate + hash only, no uploads")
     ap.add_argument("--no-validate", action="store_true", help="skip wasmtime validation / example run")
     ap.add_argument("--no-ipfs", action="store_true", help="skip Pinata pinning")
