@@ -3,8 +3,8 @@ import "./globals.css";
 import { Providers } from "@/components/Providers";
 
 export const metadata: Metadata = {
-  title: "Securio - Cybersecurity Services",
-  description: "Cybersecurity Next.js template built for cybersecurity and MSP companies.",
+  title: "Verity - Verifiable Computation",
+  description: "Prove the computation, not just the result. Verity is a verifiable computation platform.",
 };
 
 export default function RootLayout({

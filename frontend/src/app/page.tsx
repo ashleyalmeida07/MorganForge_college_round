@@ -3,8 +3,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 import React, { useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { User } from "lucide-react";
+import Link from "next/link";
 
 export default function Page() {
+  const { data: session } = useSession();
   useEffect(() => {
     const scripts = [
       "/js/jquery.js?site=69d7f44961b88686fd48eee3",
@@ -382,38 +386,53 @@ mask-image: linear-gradient(to bottom, transparent 0%, black 100%);
                 </nav>
                 <div className="nav-button-wrap">
                   <div className="nav-button-wrap-small hide-mobile-landscape">
-                    <div className="dark-button">
-                      <a
-                        data-wf--button-primary--variant="nab-button-white"
-                        href="/signup"
-                        className="button w-variant-aa6af711-3d52-389d-f297-64d1b6b6f76e w-inline-block"
-                      >
-                        <div className="button-wrap-out">
-                          <div className="button-wrap-in">
-                            <div className="body-m">Login / Sign Up</div>
-                            <div className="body-m position-absolute">
-                              Login / Sign Up
-                            </div>
+                    {session ? (
+                      <a href="/dashboard" className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition bg-white/10 py-1.5 px-3 rounded-full border border-white/20">
+                        {session.user?.image ? (
+                          <img src={session.user.image} alt={session.user?.name || "User"} className="w-6 h-6 rounded-full" />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                            <User className="w-3.5 h-3.5" />
                           </div>
-                        </div>
+                        )}
+                        <span className="text-sm font-medium text-white">{session.user?.name || "Ashley Almeida"}</span>
                       </a>
-                    </div>
-                    <div className="light-button">
-                      <a
-                        data-wf--button-primary--variant="nav-button"
-                        href="/signup"
-                        className="button w-variant-5a46ce55-4c6d-4c1d-722e-9c9b6b1dd13a w-inline-block"
-                      >
-                        <div className="button-wrap-out">
-                          <div className="button-wrap-in">
-                            <div className="body-m">Login / Sign Up</div>
-                            <div className="body-m position-absolute">
-                              Login / Sign Up
+                    ) : (
+                      <>
+                        <div className="dark-button">
+                          <a
+                            data-wf--button-primary--variant="nab-button-white"
+                            href="/signup"
+                            className="button w-variant-aa6af711-3d52-389d-f297-64d1b6b6f76e w-inline-block"
+                          >
+                            <div className="button-wrap-out">
+                              <div className="button-wrap-in">
+                                <div className="body-m">Login / Sign Up</div>
+                                <div className="body-m position-absolute">
+                                  Login / Sign Up
+                                </div>
+                              </div>
                             </div>
-                          </div>
+                          </a>
                         </div>
-                      </a>
-                    </div>
+                        <div className="light-button">
+                          <a
+                            data-wf--button-primary--variant="nav-button"
+                            href="/signup"
+                            className="button w-variant-5a46ce55-4c6d-4c1d-722e-9c9b6b1dd13a w-inline-block"
+                          >
+                            <div className="button-wrap-out">
+                              <div className="button-wrap-in">
+                                <div className="body-m">Login / Sign Up</div>
+                                <div className="body-m position-absolute">
+                                  Login / Sign Up
+                                </div>
+                              </div>
+                            </div>
+                          </a>
+                        </div>
+                      </>
+                    )}
                   </div>
                   <div className="menu-button w-nav-button">
                     <div className="nav-button-component">
@@ -501,20 +520,37 @@ mask-image: linear-gradient(to bottom, transparent 0%, black 100%);
                       </div>
                     </div>
                     <div className="button-stack">
-                      <a
-                        data-wf--button-primary--variant="base"
-                        href="/signup"
-                        className="button w-inline-block"
-                      >
-                        <div className="button-wrap-out">
-                          <div className="button-wrap-in">
-                            <div className="body-m">Login / Sign Up</div>
-                            <div className="body-m position-absolute">
-                              Login / Sign Up
+                      {session ? (
+                        <a
+                          data-wf--button-primary--variant="base"
+                          href="/dashboard"
+                          className="button w-inline-block"
+                        >
+                          <div className="button-wrap-out">
+                            <div className="button-wrap-in">
+                              <div className="body-m">Go to Dashboard</div>
+                              <div className="body-m position-absolute">
+                                Go to Dashboard
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </a>
+                        </a>
+                      ) : (
+                        <a
+                          data-wf--button-primary--variant="base"
+                          href="/signup"
+                          className="button w-inline-block"
+                        >
+                          <div className="button-wrap-out">
+                            <div className="button-wrap-in">
+                              <div className="body-m">Login / Sign Up</div>
+                              <div className="body-m position-absolute">
+                                Login / Sign Up
+                              </div>
+                            </div>
+                          </div>
+                        </a>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -730,7 +766,7 @@ mask-image: linear-gradient(to bottom, transparent 0%, black 100%);
                     <div className="h3 text-align-center scroll-highlight">
                       &quot;They brought clarity to complex problems, breaking
                       down barriers and delivering innovative solutions.  I was
-                      truly impressed by how quickly their strategies turned
+                      truly impressed by how quickly their strategies tuned
                       into real, tangible outcomes.&quot;
                     </div>
                   </div>
@@ -1316,20 +1352,37 @@ mask-image: linear-gradient(to bottom, transparent 0%, black 100%);
                           </h2>
                         </div>
                         <div className="button-stack">
-                          <a
-                            data-wf--button-primary--variant="white"
-                            href="/signup"
-                            className="button w-variant-7796a781-a911-051b-9ce3-835095f27174 w-inline-block"
-                          >
-                            <div className="button-wrap-out">
-                              <div className="button-wrap-in">
-                                <div className="body-m">Login / Sign Up</div>
-                                <div className="body-m position-absolute">
-                                  Login / Sign Up
+                          {session ? (
+                            <a
+                              data-wf--button-primary--variant="white"
+                              href="/dashboard"
+                              className="button w-variant-7796a781-a911-051b-9ce3-835095f27174 w-inline-block"
+                            >
+                              <div className="button-wrap-out">
+                                <div className="button-wrap-in">
+                                  <div className="body-m">Go to Dashboard</div>
+                                  <div className="body-m position-absolute">
+                                    Go to Dashboard
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          </a>
+                            </a>
+                          ) : (
+                            <a
+                              data-wf--button-primary--variant="white"
+                              href="/signup"
+                              className="button w-variant-7796a781-a911-051b-9ce3-835095f27174 w-inline-block"
+                            >
+                              <div className="button-wrap-out">
+                                <div className="button-wrap-in">
+                                  <div className="body-m">Login / Sign Up</div>
+                                  <div className="body-m position-absolute">
+                                    Login / Sign Up
+                                  </div>
+                                </div>
+                              </div>
+                            </a>
+                          )}
                         </div>
                       </div>
                     </div>
