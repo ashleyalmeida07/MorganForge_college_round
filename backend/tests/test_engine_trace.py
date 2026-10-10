@@ -1,7 +1,8 @@
 """Offline tests: deterministic WASM rule sets, content-addressed commitments,
 receipt signing and the TRACE_V2 execution-trace Merkle commitments.
 
-Needs the built rule sets (cd rulesets && cargo build --release --target wasm32-unknown-unknown).
+Runs against the committed rule-set binaries (rulesets/<name>/<name>.wasm: the bytes registered
+on chain); rebuild them with rulesets/build_all.sh.
 """
 from __future__ import annotations
 
@@ -18,15 +19,16 @@ from app.utils import canonical, sha256
 from app.workers.common import tamper_output
 
 RULESETS = Path(__file__).resolve().parents[2] / "rulesets"
-WASM_DIR = RULESETS / "target" / "wasm32-unknown-unknown" / "release"
 NAMES = ["payroll", "loan_amortization", "tax_india", "stats_outliers", "credit_risk", "ml_inference"]
 
-pytestmark = pytest.mark.skipif(not WASM_DIR.exists(), reason="rule sets not built")
+pytestmark = pytest.mark.skipif(
+    not all((RULESETS / n / f"{n}.wasm").exists() for n in NAMES), reason="rule sets not built"
+)
 
 
 def load(name: str) -> tuple[bytes, dict]:
     meta = json.loads((RULESETS / name / "meta.json").read_text(encoding="utf-8"))
-    return (WASM_DIR / f"{name}.wasm").read_bytes(), meta
+    return (RULESETS / name / f"{name}.wasm").read_bytes(), meta
 
 
 @pytest.mark.parametrize("name", NAMES)
