@@ -1,36 +1,44 @@
 # Verity
 
-Verifiable computation for a new era of trust. Prove the computation, not just the result.
+Verifiable computation for a new era of trust. **Prove the computation, not just the result.**
 
-## Off-Chain Provider Layer
+A Requester asks a Provider to run an agreed, deterministic program over an agreed input. The
+Provider returns a result plus a signed, hash-committed execution receipt. Independent Verifiers
+(and the Requester themself, in the browser) re-execute and attest on-chain. Disagreements go
+through an on-chain dispute with stake slashing. Every request, receipt, attestation and dispute
+is recorded on **Solana devnet**.
 
-The off-chain provider layer simulates various node operators. Some are honest, and others attempt to cheat by manipulating results, inputs, or traces.
+Full design: [`Implementation_plan.md`](Implementation_plan.md). Deployed program addresses and
+smoke-test results: [`programs/verity_core/DEPLOYMENT.md`](programs/verity_core/DEPLOYMENT.md).
 
-### How to Run the Demo
+## Stack
 
-To test the provider behaviors locally without deploying smart contracts:
+Next.js (frontend) · FastAPI (backend, provider/verifier/finalizer workers) · Supabase
+(Postgres + Auth, cache/index only) · Anchor program `verity_core` on Solana devnet · wasmtime
+(deterministic WASM execution) · optional Groth16 zk verifier (`verity_zk_verifier`) for the
+payroll rule set.
 
-1. Navigate to the offchain folder:
-   ```bash
-   cd offchain
-   ```
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Run the CLI tool with the providers you want to simulate (e.g. `honest`, `lazy`, `wrongresult`, `wronginput`, `slow`, `flaky`):
-   ```bash
-   npx tsx cli.ts honest lazy wrongresult
-   ```
+## Repo layout
 
-You will see output detailing each provider's execution steps, their submitted results, and a table summarizing whether they produced the correct outcome.
+```
+programs/verity_core/   Anchor program (on-chain source of truth) + devnet deploy scripts
+rulesets/                deterministic WASM rule sets (payroll, loan, tax, stats, risk, ml)
+backend/                 FastAPI API + provider/verifier/finalizer workers — see backend/README.md
+frontend/                Next.js app — see frontend/README.md
+zk/                      Groth16 circuit + setup for the zk-verified payroll rule set
+supabase/                SQL migrations (schema, RLS, hash-chained audit log)
+```
 
-### Plugging in the Real Smart Contract
+## Run locally
 
-Currently, the system uses an in-memory `MockChain.ts` adapter. Once the Solidity contracts (e.g., `VerityJobs.sol`) are deployed:
+1. `programs/verity_core` is already deployed to devnet — you don't need to redeploy it to run
+   the app locally (see `DEPLOYMENT.md` for the program ID and keys).
+2. Backend: follow [`backend/README.md`](backend/README.md) (env, Supabase migration, keypairs,
+   chain bootstrap, rule-set seeding, `uvicorn app.main:app --reload`).
+3. Frontend: follow [`frontend/README.md`](frontend/README.md) (`npm install && npm run dev`).
 
-1. Create a `ViemChainAdapter.ts` in `offchain/chain/` that implements the `ChainAdapter` interface.
-2. Inside this adapter, use `viem` to listen to on-chain `JobCreated` events.
-3. Call the `acceptJob` and `submitResult` contract methods using the provider's wallet.
-4. Replace `new MockChain()` in `cli.ts` (or your entry point) with `new ViemChainAdapter(rpcUrl, privateKey)`.
-5. The providers will seamlessly connect and start interacting with the real blockchain!
+## Adversarial testing
+
+Chaos flags (tampered output, swapped program, tampered blobs, forged signature, lazy verifier)
+are toggled from `/admin` or `POST /admin/chaos` and exercised by `backend/tests/test_adversarial.py`
+— see the table in `backend/README.md` §5.
