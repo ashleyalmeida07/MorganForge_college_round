@@ -1,7 +1,12 @@
 "use client";
 
-import { SessionProvider } from "next-auth/react";
+import { AuthProvider } from "@/components/auth/AuthProvider";
+import { SolanaProvider } from "@/components/solana/SolanaProvider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  return <SessionProvider>{children}</SessionProvider>;
+  return (
+    <AuthProvider>
+      <SolanaProvider>{children}</SolanaProvider>
+    </AuthProvider>
+  );
 }

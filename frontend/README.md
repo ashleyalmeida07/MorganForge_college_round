@@ -1,36 +1,40 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Verity — frontend
 
-## Getting Started
+Next.js 16 (App Router) · Supabase Auth (Google + email) · Solana wallet adapter · Anchor client for `verity_core` · Verity FastAPI backend.
 
-First, run the development server:
+## Run
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local   # fill in values
+npm install
+npm run dev                  # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Var | Purpose |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase project (anon key only) |
+| `NEXT_PUBLIC_API_URL` | FastAPI backend base URL |
+| `NEXT_PUBLIC_SOLANA_RPC` | Solana RPC (devnet) |
+| `NEXT_PUBLIC_PROGRAM_ID` | `verity_core` program id |
+| `NEXT_PUBLIC_CLUSTER` | `devnet` (explorer links) |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Supabase dashboard setup: enable **Authentication → Providers → Google**, and add `http://localhost:3000/auth/callback` (plus your Vercel URL + `/auth/callback`) to **Authentication → URL Configuration → Redirect URLs**.
 
-## Learn More
+## Layout
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/
+  proxy.ts                    session refresh + route guard (/dashboard, /create-job, /provider)
+  app/auth/callback/route.ts  OAuth / email-confirm code exchange
+  components/auth/AuthProvider.tsx     useAuth(): user, session, signOut
+  components/solana/SolanaProvider.tsx connection + wallet context
+  components/solana/WalletButton.tsx   connect wallet + link it to the account (signed nonce)
+  lib/api.ts       typed backend client (adds Supabase bearer token)
+  lib/hooks.ts     useApi(path, pollMs), useVerityProgram()
+  lib/solana.ts    PDAs + createRequest / openDispute / registerAndStakeProvider
+  lib/hash.ts      canonical JSON + SHA-256 (matches backend byte-for-byte)
+  lib/verify.ts    in-browser WASM re-execution
+  idl/             verity_core IDL (copied from programs/verity_core/idl)
+```
