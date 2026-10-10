@@ -1,0 +1,92 @@
+name: test-deploy
+# 1. Build the verity_core Anchor program.
+# 2. Run the full setup + end-to-end smoke test against a LOCAL validator.
+# Devnet deploy is done locally (see DEPLOYMENT.md): public devnet RPC stalls from shared CI IPs.
+# Secrets: DEPLOYER_KEYPAIR, PROGRAM_KEYPAIR, ACTOR_KEYS (provider + verifiers).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: devnet-deploy
+  cancel-in-progress: false
+
+env:
+  AGAVE_VERSION: v3.1.14
+  ANCHOR_VERSION: 0.32.1
+
+jobs:
+  test-deploy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cache/solana
+            ~/.local/share/solana
+          key: tools-agave-3.1.14-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: tools-agave-3.1.14-
+
+      - name: Install Solana + Anchor
+        run: |
+          if [ ! -x "$HOME/.local/share/solana/install/active_release/bin/solana" ]; then
+            sh -c "$(curl -sSfL https://release.anza.xyz/$AGAVE_VERSION/install)"
+          fi
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+          sudo curl -sSfL -o /usr/local/bin/anchor \
+            "https://github.com/solana-foundation/anchor/releases/download/v$ANCHOR_VERSION/anchor-$ANCHOR_VERSION-x86_64-unknown-linux-gnu"
+          sudo chmod +x /usr/local/bin/anchor
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          anchor --version && solana --version && cargo --version
+
+      - name: Write keys
+        env:
+          PROGRAM_KEYPAIR: ${{ secrets.PROGRAM_KEYPAIR }}
+          DEPLOYER_KEYPAIR: ${{ secrets.DEPLOYER_KEYPAIR }}
+          ACTOR_KEYS: ${{ secrets.ACTOR_KEYS }}
+        run: |
+          mkdir -p target/deploy ~/.config/solana keys
+          printf '%s' "$PROGRAM_KEYPAIR" > target/deploy/verity_core-keypair.json
+          printf '%s' "$DEPLOYER_KEYPAIR" > ~/.config/solana/id.json
+          printf '%s' "$ACTOR_KEYS" | node -e '
+            const b = JSON.parse(require("fs").readFileSync(0, "utf8"));
+            for (const [n, k] of Object.entries(b)) require("fs").writeFileSync(`keys/${n}.json`, JSON.stringify(k));'
+          echo "deployer: $(solana address -k ~/.config/solana/id.json)"
+          echo "program:  $(solana address -k target/deploy/verity_core-keypair.json)"
+
+      - name: Build
+        run: anchor build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: verity_core-build
+          path: |
+            target/deploy/verity_core.so
+            target/idl/verity_core.json
+            target/types/verity_core.ts
+            Cargo.lock
+
+      - name: Install script deps
+        run: npm ci --no-audit --no-fund
+
+      - name: TEST on local validator (setup + end-to-end smoke test)
+        env:
+          DEPLOYER_KEYPAIR: /home/runner/.config/solana/id.json
+          RPC_URL: http://127.0.0.1:8899
+        run: |
+          PID=$(solana address -k target/deploy/verity_core-keypair.json)
+          solana-test-validator --reset --quiet --ledger /tmp/ledger \
+            --bpf-program "$PID" target/deploy/verity_core.so > /tmp/validator.log 2>&1 &
+          for i in $(seq 1 90); do solana cluster-version -u localhost >/dev/null 2>&1 && break; sleep 1; done
+          solana cluster-version -u localhost || { tail -50 /tmp/validator.log; exit 1; }
+          solana airdrop 100 -u localhost -k ~/.config/solana/id.json
+          node scripts/setup-devnet.mjs
+          node scripts/smoke-test.mjs
+          kill %1 || true
+

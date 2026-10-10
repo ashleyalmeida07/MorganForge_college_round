@@ -1,0 +1,58 @@
+services:
+  - type: web
+    name: verity-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      # --- Solana
+      - key: SOLANA_RPC_URL
+        value: https://api.devnet.solana.com   # or a Helius devnet URL
+      - key: PROGRAM_ID
+        value: ByADChPce9hwCuSak9hFwiiCyndYGj7dkYypm4XYEJL1
+      - key: CLUSTER
+        value: devnet
+      - key: PROVIDER_KEYPAIR_JSON        # JSON array of 64 bytes, or base64 of the 64 bytes
+        sync: false
+      - key: VERIFIER_KEYPAIRS_JSON       # JSON array of 3 keypairs
+        sync: false
+      - key: ADMIN_KEYPAIR_JSON           # config authority (falls back to provider)
+        sync: false
+      # --- Supabase
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: DATABASE_URL                 # only needed for scripts/apply_migration.py
+        sync: false
+      # --- Pinata / IPFS (optional)
+      - key: PINATA_API_KEY
+        sync: false
+      - key: PINATA_API_SECRET
+        sync: false
+      - key: PINATA_JWT
+        sync: false
+      - key: PINATA_GATEWAY
+        sync: false
+      # --- App
+      - key: FRONTEND_ORIGIN              # comma-separated list of allowed origins
+        sync: false
+      - key: ADMIN_EMAILS
+        value: support@arhamfintech.ai
+      - key: WORKERS_ENABLED
+        value: "true"
+      # --- AI explainer (optional)
+      - key: GROQ_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
