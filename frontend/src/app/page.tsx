@@ -491,33 +491,47 @@ mask-image: linear-gradient(to bottom, transparent 0%, black 100%);
                     <div className="stack-hero-home">
                       <div className="stack-trusted-by">
                         <div className="stack-images-trusted-logos">
-                          <img
-                            src="images/female_ceo_portrait_close_up_2_2x.webp"
-                            loading="eager"
-                            alt="Client Photo Four"
-                            className="single-testimonial-image"
-                          />
-                          <img
-                            src="images/tech_entrepreneur_portrait_2_2x.webp"
-                            loading="eager"
-                            alt="Client Photo Three"
-                            className="single-testimonial-image"
-                          />
-                          <img
-                            src="images/hyper_realistic_linkedin_headshot_1_2_2x.webp"
-                            loading="eager"
-                            alt="Client Photo Two"
-                            className="single-testimonial-image"
-                          />
-                          <img
-                            src="images/hyper_realistic_business_portrait_2_2x.webp"
-                            loading="eager"
-                            alt="Client Photo"
-                            className="single-testimonial-image"
-                          />
+                          <div 
+                            className="single-testimonial-image flex items-center justify-center bg-gradient-to-tr from-[#9945FF] to-[#14F195] border-2 border-[#090D1A] shadow-sm overflow-hidden" 
+                            title="Anchored on Solana Devnet"
+                          >
+                            <svg className="w-4 h-4 text-white" viewBox="0 0 397 311" fill="currentColor">
+                              <path d="M64.6 237.9c2.4-2.4 5.7-3.8 9.2-3.8h313.7c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1l62.7-62.7zM64.6 3.8C67 1.4 70.3 0 73.8 0h313.7c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1L64.6 3.8zm267.8 115.1c-2.4-2.4-5.7-3.8-9.2-3.8H9.5c-5.8 0-8.7 7-4.6 11.1l62.7 62.7c2.4 2.4 5.7 3.8 9.2 3.8h313.7c5.8 0 8.7-7 4.6-11.1l-62.7-62.7z"/>
+                            </svg>
+                          </div>
+                          <div 
+                            className="single-testimonial-image flex items-center justify-center bg-gradient-to-tr from-blue-600 to-cyan-400 border-2 border-[#090D1A] shadow-sm overflow-hidden" 
+                            title="Merkle Execution Trace"
+                          >
+                            <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M12 2v6m0 0l-4 4m4-4l4 4M8 12v6m8-6v6"/>
+                              <circle cx="12" cy="2" r="1" fill="currentColor"/>
+                              <circle cx="8" cy="18" r="1" fill="currentColor"/>
+                              <circle cx="16" cy="18" r="1" fill="currentColor"/>
+                            </svg>
+                          </div>
+                          <div 
+                            className="single-testimonial-image flex items-center justify-center bg-gradient-to-tr from-emerald-500 to-teal-400 border-2 border-[#090D1A] shadow-sm overflow-hidden" 
+                            title="Tamper-Evident Receipts"
+                          >
+                            <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                              <path d="m9 12 2 2 4-4"/>
+                            </svg>
+                          </div>
+                          <div 
+                            className="single-testimonial-image flex items-center justify-center bg-gradient-to-tr from-violet-600 to-indigo-500 border-2 border-[#090D1A] shadow-sm overflow-hidden" 
+                            title="Ed25519 Cryptographic Attestation"
+                          >
+                            <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <rect width="18" height="18" x="3" y="3" rx="2"/>
+                              <path d="m9 9 6 6m0-6-6 6"/>
+                            </svg>
+                          </div>
                         </div>
-                        <div className="body-l text-color-primary-light custom-mobile">
-                          Trusted by 300+ companies
+                        <div className="body-l text-color-primary-light custom-mobile flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block"></span>
+                          <span>Anchored on Solana Devnet • 100% Verifiable Compute</span>
                         </div>
                       </div>
                       <div className="text-block-hero">
