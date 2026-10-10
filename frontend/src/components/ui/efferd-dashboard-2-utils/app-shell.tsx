@@ -11,12 +11,16 @@ import {
   Send, 
   Bell,
   Sidebar,
-  Home
+  Home,
+  LogOut,
+  User as UserIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { signOut, useSession } from 'next-auth/react';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const { data: session } = useSession();
   return (
     <div className="flex h-screen w-full bg-slate-50 text-slate-900 overflow-hidden font-sans">
       <div className="w-[240px] border-r border-slate-200 bg-white flex flex-col h-full hidden md:flex shrink-0">
@@ -75,19 +79,63 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <BookOpen className="mr-3 h-4 w-4 text-slate-400" />
             Docs
           </Button>
+          <Button 
+            onClick={() => signOut({ callbackUrl: '/' })} 
+            variant="ghost" 
+            className="w-full justify-start h-9 px-3 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md"
+          >
+            <LogOut className="mr-3 h-4 w-4 text-red-500" />
+            Log Out
+          </Button>
+
+          {session?.user && (
+            <div className="flex items-center gap-3 pt-3 mt-2 border-t border-slate-100 px-1">
+              {session.user.image ? (
+                <img src={session.user.image} alt={session.user.name || "User"} className="w-8 h-8 rounded-full border border-slate-200 object-cover" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-semibold text-xs">
+                  {session.user.name ? session.user.name[0] : "U"}
+                </div>
+              )}
+              <div className="overflow-hidden">
+                <p className="text-xs font-semibold text-slate-800 truncate">{session.user.name || "User"}</p>
+                <p className="text-[11px] text-slate-400 truncate">{session.user.email}</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
       
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        <div className="h-14 border-b border-slate-200 flex flex-row items-center justify-end px-6 gap-4 shrink-0 bg-white">
+        <div className="h-14 border-b border-slate-200 flex flex-row items-center justify-end px-6 gap-3 shrink-0 bg-white">
           <Button variant="ghost" size="icon" className="rounded-full w-9 h-9 text-slate-500 hover:text-slate-900 hover:bg-slate-100 flex items-center justify-center">
             <Send className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="icon" className="rounded-full w-9 h-9 text-slate-500 hover:text-slate-900 hover:bg-slate-100 flex items-center justify-center">
             <Bell className="h-4 w-4" />
           </Button>
-          <div className="w-8 h-8 bg-slate-200 rounded-full border border-slate-300 overflow-hidden flex-shrink-0 cursor-pointer">
-            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Ashley" alt="Avatar" className="w-full h-full object-cover" />
+          
+          <div className="flex items-center gap-2 pl-3 border-l border-slate-200">
+            <div className="w-8 h-8 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center overflow-hidden shrink-0">
+              {session?.user?.image ? (
+                <img src={session.user.image} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                <UserIcon className="w-4 h-4 text-blue-600" />
+              )}
+            </div>
+            <span className="text-xs font-semibold text-slate-800">
+              {session?.user?.name || "Ashley Almeida"}
+            </span>
+            <Button 
+              onClick={() => signOut({ callbackUrl: '/' })} 
+              variant="ghost" 
+              size="sm"
+              className="ml-1 text-xs h-8 px-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md"
+              title="Log Out"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="sr-only">Log Out</span>
+            </Button>
           </div>
         </div>
         <div className="flex-1 overflow-auto p-6 md:p-8">

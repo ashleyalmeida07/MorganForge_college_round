@@ -3,8 +3,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 import React, { useEffect } from "react";
-import { useSession } from "next-auth/react";
-import { User } from "lucide-react";
+import { useSession, signOut } from "next-auth/react";
+import { User, LogOut } from "lucide-react";
 import Link from "next/link";
 
 export default function Page() {
@@ -387,16 +387,26 @@ mask-image: linear-gradient(to bottom, transparent 0%, black 100%);
                 <div className="nav-button-wrap">
                   <div className="nav-button-wrap-small hide-mobile-landscape">
                     {session ? (
-                      <a href="/dashboard" className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition bg-white/10 py-1.5 px-3 rounded-full border border-white/20">
-                        {session.user?.image ? (
-                          <img src={session.user.image} alt={session.user?.name || "User"} className="w-6 h-6 rounded-full" />
-                        ) : (
-                          <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-                            <User className="w-3.5 h-3.5" />
-                          </div>
-                        )}
-                        <span className="text-sm font-medium text-white">{session.user?.name || "Ashley Almeida"}</span>
-                      </a>
+                      <div className="flex items-center gap-2">
+                        <a href="/dashboard" className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition bg-white/10 py-1.5 px-3 rounded-full border border-white/20">
+                          {session.user?.image ? (
+                            <img src={session.user.image} alt={session.user?.name || "User"} className="w-6 h-6 rounded-full" />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                              <User className="w-3.5 h-3.5" />
+                            </div>
+                          )}
+                          <span className="text-sm font-medium text-white">{session.user?.name || "Ashley Almeida"}</span>
+                        </a>
+                        <button
+                          onClick={() => signOut({ callbackUrl: '/' })}
+                          className="flex items-center gap-1 text-xs text-white/70 hover:text-white px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 transition cursor-pointer"
+                          title="Log Out"
+                        >
+                          <LogOut className="w-3.5 h-3.5" />
+                          <span>Log Out</span>
+                        </button>
+                      </div>
                     ) : (
                       <>
                         <div className="dark-button">

@@ -64,105 +64,110 @@ export default function ConnectProviderPage() {
 
   return (
     <AppShell>
-      <div className="container mx-auto py-10 space-y-8 max-w-5xl">
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Connect External Provider</h1>
-        <p className="text-muted-foreground">Run a Verity provider agent on your own hardware and earn rewards.</p>
-      </div>
+      <div className="container mx-auto py-10 max-w-5xl">
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-slate-900">Connect External Provider</h1>
+          <p className="text-slate-500 mt-1 text-sm">Run a Verity provider agent on your own hardware and earn rewards.</p>
+        </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Run Guide */}
-        <Card>
-          <CardHeader>
-            <CardTitle>4-Step Run Guide</CardTitle>
-            <CardDescription>Follow these steps to run your agent</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label className="font-semibold text-sm">1. Clone & Install</Label>
-              <div className="flex relative">
-                <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto w-full">git clone https://github.com/verity/verity.git{'\n'}cd offchain/provider-agent{'\n'}npm install</pre>
-                <Button size="icon" variant="ghost" className="absolute top-2 right-2 h-6 w-6" onClick={() => copyToClipboard('git clone https://github.com/verity/verity.git\ncd offchain/provider-agent\nnpm install')}><Copy className="w-3 h-3"/></Button>
-              </div>
+        <div className="space-y-10 divide-y divide-slate-200">
+          
+          {/* Run Guide Section */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-8 first:pt-0">
+            <div className="md:col-span-1">
+              <h2 className="text-base font-semibold text-slate-900">4-Step Run Guide</h2>
+              <p className="text-sm text-slate-500 mt-1">Follow these instructions to run the provider agent locally on your machine.</p>
             </div>
-            <div className="space-y-2">
-              <Label className="font-semibold text-sm">2. Configure .env</Label>
-              <p className="text-xs text-muted-foreground">Copy <code>.env.example</code> to <code>.env</code>. It is pre-filled with the local RPC URL and Contract Address.</p>
-              <div className="flex relative">
-                <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto w-full">RPC_URL=http://127.0.0.1:8545{'\n'}CONTRACT_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3{'\n'}PRIVATE_KEY=your_wallet_private_key</pre>
-                <Button size="icon" variant="ghost" className="absolute top-2 right-2 h-6 w-6" onClick={() => copyToClipboard('RPC_URL=http://127.0.0.1:8545\nCONTRACT_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3\nPRIVATE_KEY=')}><Copy className="w-3 h-3"/></Button>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label className="font-semibold text-sm">3. Run the Agent</Label>
-              <div className="flex relative">
-                <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto w-full">npx ts-node src/index.ts</pre>
-                <Button size="icon" variant="ghost" className="absolute top-2 right-2 h-6 w-6" onClick={() => copyToClipboard('npx ts-node src/index.ts')}><Copy className="w-3 h-3"/></Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="space-y-6">
-          {/* Register Form */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Register Provider on Chain</CardTitle>
-              <CardDescription>Link your deployed agent to your wallet</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Public API URL</Label>
-                  <Input 
-                    placeholder="http://your-ip:8080" 
-                    value={apiUrl}
-                    onChange={(e) => setApiUrl(e.target.value)}
-                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                  <p className="text-[10px] text-muted-foreground">Make sure port 8080 is open to the internet.</p>
+            <div className="md:col-span-2 space-y-6">
+              <div className="space-y-2">
+                <Label className="font-semibold text-sm text-slate-700">1. Clone & Install</Label>
+                <div className="flex relative">
+                  <pre className="bg-slate-50 border border-slate-200 p-3 rounded-md text-xs overflow-x-auto w-full text-slate-800">git clone https://github.com/verity/verity.git{'\n'}cd offchain/provider-agent{'\n'}npm install</pre>
+                  <Button size="icon" variant="ghost" className="absolute top-2 right-2 h-6 w-6 text-slate-400 hover:text-slate-900" onClick={() => copyToClipboard('git clone https://github.com/verity/verity.git\ncd offchain/provider-agent\nnpm install')}><Copy className="w-3 h-3"/></Button>
                 </div>
-                <Button onClick={handleRegister} disabled={!apiUrl || isRegistering} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 h-auto rounded-lg shadow-sm">
+              </div>
+              <div className="space-y-2">
+                <Label className="font-semibold text-sm text-slate-700">2. Configure Environment</Label>
+                <p className="text-xs text-slate-500">Copy <code>.env.example</code> to <code>.env</code> and fill in your private key.</p>
+                <div className="flex relative">
+                  <pre className="bg-slate-50 border border-slate-200 p-3 rounded-md text-xs overflow-x-auto w-full text-slate-800">RPC_URL=http://127.0.0.1:8545{'\n'}CONTRACT_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3{'\n'}PRIVATE_KEY=your_wallet_private_key</pre>
+                  <Button size="icon" variant="ghost" className="absolute top-2 right-2 h-6 w-6 text-slate-400 hover:text-slate-900" onClick={() => copyToClipboard('RPC_URL=http://127.0.0.1:8545\nCONTRACT_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3\nPRIVATE_KEY=')}><Copy className="w-3 h-3"/></Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="font-semibold text-sm text-slate-700">3. Run the Agent</Label>
+                <div className="flex relative">
+                  <pre className="bg-slate-50 border border-slate-200 p-3 rounded-md text-xs overflow-x-auto w-full text-slate-800">npx ts-node src/index.ts</pre>
+                  <Button size="icon" variant="ghost" className="absolute top-2 right-2 h-6 w-6 text-slate-400 hover:text-slate-900" onClick={() => copyToClipboard('npx ts-node src/index.ts')}><Copy className="w-3 h-3"/></Button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Registration Section */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-8">
+            <div className="md:col-span-1">
+              <h2 className="text-base font-semibold text-slate-900">Provider Registration</h2>
+              <p className="text-sm text-slate-500 mt-1">Link your deployed agent to your wallet to start accepting jobs.</p>
+            </div>
+            <div className="md:col-span-2 space-y-6">
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-slate-700">Public API URL</Label>
+                <Input 
+                  placeholder="http://your-ip:8080" 
+                  value={apiUrl}
+                  onChange={(e) => setApiUrl(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-shadow"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">Make sure port 8080 is open to the internet.</p>
+              </div>
+              <div className="flex justify-end pt-2">
+                <Button onClick={handleRegister} disabled={!apiUrl || isRegistering} className="bg-slate-900 hover:bg-slate-800 text-white font-medium py-2.5 px-6 h-auto rounded-lg shadow-sm transition-colors">
                   {isRegistering && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Register Provider
                 </Button>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          {/* Provider List */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Registered Providers</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {providers.map((p, i) => (
-                  <div key={i} className="flex items-center justify-between border-b pb-3 last:border-0 last:pb-0">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm">{p.wallet.substring(0,6)}...{p.wallet.substring(p.wallet.length-4)}</span>
-                        {healthStatus[p.wallet] === undefined ? (
-                           <span className="flex items-center text-[10px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-600"><Loader2 className="w-3 h-3 mr-1 animate-spin"/> Pinging...</span>
-                        ) : healthStatus[p.wallet] ? (
-                          <span className="flex items-center text-[10px] bg-green-100 px-1.5 py-0.5 rounded text-green-700"><CheckCircle2 className="w-3 h-3 mr-1"/> Online</span>
-                        ) : (
-                          <span className="flex items-center text-[10px] bg-red-100 px-1.5 py-0.5 rounded text-red-700"><XCircle className="w-3 h-3 mr-1"/> Offline</span>
-                        )}
+          {/* Network List Section */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-8">
+            <div className="md:col-span-1">
+              <h2 className="text-base font-semibold text-slate-900">Network Status</h2>
+              <p className="text-sm text-slate-500 mt-1">Currently registered and active providers on the network.</p>
+            </div>
+            <div className="md:col-span-2">
+              <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+                <ul className="divide-y divide-slate-100">
+                  {providers.map((p, i) => (
+                    <li key={i} className="p-4 hover:bg-slate-50 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="flex items-center gap-3">
+                            <span className="font-semibold text-sm text-slate-900">{p.wallet.substring(0,6)}...{p.wallet.substring(p.wallet.length-4)}</span>
+                            {healthStatus[p.wallet] === undefined ? (
+                               <span className="flex items-center text-[11px] font-medium bg-slate-100 px-2 py-0.5 rounded-full text-slate-600"><Loader2 className="w-3 h-3 mr-1 animate-spin"/> Pinging</span>
+                            ) : healthStatus[p.wallet] ? (
+                              <span className="flex items-center text-[11px] font-medium bg-emerald-50 px-2 py-0.5 rounded-full text-emerald-600"><CheckCircle2 className="w-3 h-3 mr-1"/> Online</span>
+                            ) : (
+                              <span className="flex items-center text-[11px] font-medium bg-rose-50 px-2 py-0.5 rounded-full text-rose-600"><XCircle className="w-3 h-3 mr-1"/> Offline</span>
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-500 mt-1.5 font-mono bg-slate-100 inline-block px-1.5 py-0.5 rounded">{p.apiUrl}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs font-semibold text-slate-700">{p.jobsCompleted} <span className="font-normal text-slate-500">Jobs</span></div>
+                          <div className="text-xs font-semibold text-rose-600 mt-1">{p.timesSlashed} <span className="font-normal text-rose-400">Slashes</span></div>
+                        </div>
                       </div>
-                      <div className="text-xs text-muted-foreground mt-1">{p.apiUrl}</div>
-                      <div className="text-[10px] text-muted-foreground mt-1">
-                        Jobs: {p.jobsCompleted} | Slashed: {p.timesSlashed}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                    </li>
+                  ))}
+                </ul>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
-        </div>
     </AppShell>
   );
 }
