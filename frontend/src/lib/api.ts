@@ -176,6 +176,35 @@ export interface AuditVerifyOut {
   ok_overall: boolean;
 }
 
+export interface TimelineItem {
+  seq: number | null;
+  event_type: string;
+  at: string | null;
+  tx_sig: string | null;
+  slot: number | null;
+  explorer: string | null;
+  actor: string | null;
+  payload: Record<string, unknown>;
+  source: string;
+}
+
+export interface RequestDetail {
+  request_pda: string;
+  status: RequestStatus;
+  is_terminal: boolean;
+  request: (RequestRow & { explorer?: string | null; create_tx_explorer?: string | null }) | null;
+  program: Program | null;
+  receipt: Record<string, unknown> | null;
+  attestations: Record<string, unknown>[];
+  dispute: Record<string, unknown> | null;
+  timeline: TimelineItem[];
+  integrity: { overall: string; [k: string]: unknown } | null;
+  challenge: { window_secs: number; ends_at: string; seconds_remaining: number } | null;
+  links: { request?: string | null; requester?: string | null; provider?: string | null; program?: string | null };
+  cluster: string;
+  program_id: string;
+}
+
 export interface Health {
   ok: boolean;
   time: string;

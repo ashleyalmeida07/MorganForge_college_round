@@ -260,6 +260,9 @@ export default function CreateJobPage() {
               </div>
             </div>
             <div className="flex flex-wrap gap-4 text-sm">
+              <a href={`/requests/${success.requestPda}`} className="inline-flex items-center gap-1 text-blue-600 hover:underline">
+                View timeline <ExternalLink className="h-3.5 w-3.5" />
+              </a>
               {pdaUrl && (
                 <a href={pdaUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline">
                   View request account <ExternalLink className="h-3.5 w-3.5" />

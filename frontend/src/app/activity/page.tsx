@@ -158,6 +158,11 @@ export default function ActivityPage() {
                       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
                         <span>{fmtTime(r.created_at)}</span>
                         {r.actor && <span className="font-mono">{shortKey(r.actor)}</span>}
+                        {r.request_pda && (
+                          <a href={`/requests/${r.request_pda}`} className="inline-flex items-center gap-1 text-blue-600 hover:underline">
+                            timeline
+                          </a>
+                        )}
                         {r.request_explorer && (
                           <a href={r.request_explorer} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline">
                             request <ExternalLink className="h-3 w-3" />
