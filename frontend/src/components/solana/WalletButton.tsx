@@ -9,7 +9,9 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { apiGet, apiPost, type Me } from "@/lib/api";
 import { explorerAddress } from "@/lib/env";
-import { shortKey } from "@/lib/solana";
+import { shortKey } from "@/lib/utils";
+
+
 
 const toBase64 = (b: Uint8Array) => btoa(String.fromCharCode(...b));
 

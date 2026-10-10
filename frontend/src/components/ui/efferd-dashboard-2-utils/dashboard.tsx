@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   FileText,
   ClipboardList,
@@ -26,7 +27,9 @@ import {
 
 import { useApi } from '@/lib/hooks';
 import type { RequestRow, Stats } from '@/lib/api';
-import { shortKey } from '@/lib/solana';
+import { shortKey } from '@/lib/utils';
+
+
 import { env, explorerAddress, explorerTx } from '@/lib/env';
 
 // Row shape returned by GET /activity (audit_log row + decorate_audit_row links).
@@ -55,10 +58,11 @@ const ts = (s?: string | null) => {
 
 const fmtNum = (n?: number | null) => (n == null ? '—' : n.toLocaleString());
 
-function timeAgo(s?: string | null) {
+function timeAgo(s?: string | null, now?: number | null) {
   const t = ts(s);
   if (Number.isNaN(t)) return '—';
-  const sec = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (!now) return '—';
+  const sec = Math.max(0, Math.round((now - t) / 1000));
   if (sec < 60) return `${sec}s ago`;
   const min = Math.round(sec / 60);
   if (min < 60) return `${min} minute${min === 1 ? '' : 's'} ago`;
@@ -75,6 +79,11 @@ function niceTicks(max: number) {
 }
 
 export function Dashboard() {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+  }, []);
+
   const { data: stats, error: statsError, loading: statsLoading } = useApi<Stats>('/stats', 15000);
   const { data: requests, error: reqError } = useApi<RequestRow[]>('/requests?scope=all&limit=200', 30000);
   const { data: activity, error: actError } = useApi<ActivityRow[]>('/activity?limit=20', 15000);
@@ -84,7 +93,13 @@ export function Dashboard() {
 
   // Task throughput: requests opened (created_at) vs completed (Verified/Rejected at updated_at), last 8 weeks
   const throughputData = useMemo(() => {
-    const now = Date.now();
+    if (!now) {
+      return Array.from({ length: 8 }, (_, i) => ({
+        name: `W${i + 1}`,
+        opened: 0,
+        completed: 0,
+      }));
+    }
     const start = now - 8 * WEEK_MS;
     const buckets = Array.from({ length: 8 }, (_, i) => {
       const d = new Date(start + i * WEEK_MS);
@@ -107,7 +122,7 @@ export function Dashboard() {
       }
     }
     return buckets;
-  }, [requests]);
+  }, [requests, now]);
 
   const throughputTicks = useMemo(
     () => niceTicks(Math.max(0, ...throughputData.map((d) => Math.max(d.opened, d.completed)))),
@@ -116,7 +131,13 @@ export function Dashboard() {
 
   // Daily distribution: requests created per day over the last 7 days (ending today)
   const dailyData = useMemo(() => {
-    const today = new Date();
+    if (!now) {
+      return Array.from({ length: 7 }, (_, i) => ({
+        name: WEEKDAYS[i],
+        value: 0,
+      }));
+    }
+    const today = new Date(now);
     today.setHours(0, 0, 0, 0);
     const first = today.getTime() - 6 * DAY_MS;
     const days = Array.from({ length: 7 }, (_, i) => ({
@@ -130,7 +151,7 @@ export function Dashboard() {
       if (i >= 0 && i < 7) days[i].value += 1;
     }
     return days;
-  }, [requests]);
+  }, [requests, now]);
 
   const loadingLine = statsLoading ? 'Loading…' : '—';
   const decided = stats ? stats.verified + stats.rejected : 0;
@@ -412,7 +433,7 @@ export function Dashboard() {
                       {lastEvent.request_pda ? ` · ${shortKey(lastEvent.request_pda)}` : ''}
                     </>
                   )}{' '}
-                  · {timeAgo(lastEvent.created_at)}
+                  · {timeAgo(lastEvent.created_at, now)}
                 </>
               ) : activity ? (
                 'No audit events yet'
@@ -426,6 +447,85 @@ export function Dashboard() {
           </div>
         </div>
 
+      </div>
+
+      {/* Third Row: Recent Computation Requests Table with Live Status Badges & Link to Detail */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-bold text-slate-900">Recent Computation Requests</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Click any job to view on-chain verification, countdown timer, or open a dispute</p>
+          </div>
+          <Link href="/create-job" className="text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 flex items-center gap-1">
+            + New Computation Job
+          </Link>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs font-mono text-left">
+            <thead className="border-b border-slate-100 text-slate-400">
+              <tr>
+                <th className="py-2.5">Request PDA</th>
+                <th className="py-2.5">Title / Rule Set</th>
+                <th className="py-2.5">Bounty</th>
+                <th className="py-2.5">Status</th>
+                <th className="py-2.5">Attestations</th>
+                <th className="py-2.5 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 font-sans">
+              {(requests ?? []).slice(0, 10).map((r) => {
+                const isVerified = r.status === "Verified";
+                const isDisputed = r.status === "Disputed";
+                const isAwaiting = r.status === "AwaitingVerification";
+                const isRejected = r.status === "Rejected";
+                return (
+                  <tr key={r.request_pda} className="hover:bg-slate-50/70 transition">
+                    <td className="py-3 font-mono font-semibold text-slate-800">
+                      <Link href={`/requests/${r.request_pda}`} className="text-blue-600 hover:underline">
+                        {shortKey(r.request_pda, 6)}
+                      </Link>
+                    </td>
+                    <td className="py-3 text-slate-700">
+                      {r.title || shortKey(r.program_hash, 6)}
+                    </td>
+                    <td className="py-3 font-mono text-slate-900 font-medium">
+                      {r.bounty_lamports ? `${(r.bounty_lamports / 1e9).toFixed(3)} SOL` : "—"}
+                    </td>
+                    <td className="py-3">
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono border ${
+                          isVerified
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : isRejected
+                            ? "bg-rose-50 text-rose-700 border-rose-200"
+                            : isDisputed
+                            ? "bg-amber-50 text-amber-700 border-amber-200"
+                            : isAwaiting
+                            ? "bg-blue-50 text-blue-700 border-blue-200"
+                            : "bg-slate-100 text-slate-700 border-slate-200"
+                        }`}
+                      >
+                        {r.status}
+                      </span>
+                    </td>
+                    <td className="py-3 font-mono text-slate-600">
+                      {r.attest_count_match} match · {r.attest_count_mismatch} mismatch
+                    </td>
+                    <td className="py-3 text-right">
+                      <Link
+                        href={`/requests/${r.request_pda}`}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800"
+                      >
+                        View Details <ArrowUpRight className="w-3 h-3" />
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
     </div>

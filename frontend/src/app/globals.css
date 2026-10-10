@@ -89,3 +89,59 @@
 }
 
 /* Any Next.js specific overrides can go here */
+
+.chaos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.chaos-card {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  background: rgba(255, 255, 255, 0.03);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.chaos-card--active {
+  border-color: rgba(239, 68, 68, 0.6);
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
+}
+
+.chaos-card--danger.chaos-card--active {
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.chaos-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.chaos-card__desc {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0;
+}
+
+.scenario-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.scenario-log {
+  margin-top: 1rem;
+  background: #0d0d15;
+  padding: 1rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  color: #a3e635;
+  max-height: 200px;
+  overflow-y: auto;
+}
+

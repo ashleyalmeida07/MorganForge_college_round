@@ -9,10 +9,11 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { AppShell } from '@/components/ui/efferd-dashboard-2-utils/app-shell';
 
-import { useApi, useVerityProgram } from '@/lib/hooks';
+import { useApi } from '@/lib/hooks';
 import { apiPost, ApiError, type PrepareOut, type Program } from '@/lib/api';
 import { canonicalJson, sha256Hex } from '@/lib/hash';
-import { createRequest, LAMPORTS_PER_SOL, shortKey } from '@/lib/solana';
+import { createRequest, LAMPORTS_PER_SOL, useVerityProgram } from '@/lib/solana';
+import { shortKey } from '@/lib/utils';
 import { explorerAddress, explorerTx } from '@/lib/env';
 
 const SELECT_CLASS =

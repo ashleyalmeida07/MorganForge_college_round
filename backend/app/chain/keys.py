@@ -223,3 +223,16 @@ def payer_keypair() -> Keypair | None:
         return kp
     verifiers = verifier_keypairs()
     return verifiers[0] if verifiers else None
+
+
+@lru_cache(maxsize=1)
+def _requester_keypair() -> Keypair | None:
+    return _load_optional(settings.requester_keypair_json, "REQUESTER_KEYPAIR_JSON")
+
+
+def requester_keypair() -> Keypair | None:
+    """Keypair used to create demo requests from the admin panel.
+
+    Falls back to the fee payer so a dedicated requester is optional.
+    """
+    return _requester_keypair() or payer_keypair()
