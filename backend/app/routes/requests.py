@@ -9,12 +9,16 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
+import base58
+
 from app.audit import append_event
 from app.auth import User, get_current_user, get_optional_user
 from app.chain import indexer
+from app.chain.signer import input_commitment_message, verify_receipt
 from app.config import settings
-from app.db import BUCKET_INPUTS, public_url, table, upload_blob
+from app.db import BUCKET_INPUTS, public_url, table, upload_blob, upsert
 from app.ipfs import gateway_url, pin_bytes
+from app.routes.auth_wallet import _decode_pubkey, _decode_signature
 from app.routes.common import (
     addr_link,
     build_artifacts,
@@ -23,6 +27,7 @@ from app.routes.common import (
     call_any,
     chain_or_none,
     chain_read,
+    db_input_commitment,
     db_program,
     db_request,
     decorate_request,
@@ -31,7 +36,7 @@ from app.routes.common import (
     reexecute,
     safe,
 )
-from app.schemas import ConfirmRequestIn, PrepareRequestIn, PrepareRequestOut
+from app.schemas import ConfirmRequestIn, InputCommitmentIn, PrepareRequestIn, PrepareRequestOut
 from app.utils import canonical, sha256_hex
 
 log = logging.getLogger("verity.routes.requests")
@@ -112,6 +117,33 @@ async def prepare_request(body: PrepareRequestIn, user: User = Depends(get_curre
     )
 
 
+@router.post("/requests/commit-input")
+async def commit_input(body: InputCommitmentIn, user: User = Depends(get_current_user)) -> dict[str, Any]:
+    """Store the Requester's wallet signature over (program_hash, input_hash, input_uri_hash).
+
+    Must succeed *before* `create_request` is sent on-chain: `confirm_request` refuses to link a
+    request that has no matching, valid commitment (§4.4 "Requester-signed input commitment").
+    """
+    pubkey_bytes = _decode_pubkey(body.requester)
+    sig = _decode_signature(body.signature)
+    msg = input_commitment_message(
+        bytes.fromhex(body.program_hash), bytes.fromhex(body.input_hash), bytes.fromhex(body.input_uri_hash)
+    )
+    if not verify_receipt(pubkey_bytes, msg, sig):
+        raise HTTPException(401, "input commitment signature verification failed")
+
+    row = {
+        "request_pda": body.request_pda.strip(),
+        "requester_pubkey": body.requester.strip(),
+        "program_hash": body.program_hash,
+        "input_hash": body.input_hash,
+        "input_uri_hash": body.input_uri_hash,
+        "signature": base58.b58encode(sig).decode(),
+    }
+    await asyncio.to_thread(upsert, "input_commitments", row, "request_pda")
+    return {"ok": True}
+
+
 @router.post("/requests/confirm")
 async def confirm_request(body: ConfirmRequestIn, user: User = Depends(get_current_user)) -> dict[str, Any]:
     pda = body.request_pda.strip()
@@ -130,6 +162,20 @@ async def confirm_request(body: ConfirmRequestIn, user: User = Depends(get_curre
     existing_owner = row.get("requester_user")
     if existing_owner and existing_owner != user.id and requester not in my_wallets:
         raise HTTPException(403, "request is already linked to another account")
+
+    commitment = await asyncio.to_thread(db_input_commitment, pda)
+    expected_program_hash = synced.get("program_hash") or row.get("program_hash")
+    expected_input_hash = synced.get("input_hash") or row.get("input_hash")
+    expected_input_uri_hash = synced.get("input_uri_hash") or row.get("input_uri_hash")
+    commitment_valid = bool(
+        commitment
+        and commitment.get("requester_pubkey") == requester
+        and (commitment.get("program_hash") or "").lower() == (expected_program_hash or "").lower()
+        and (commitment.get("input_hash") or "").lower() == (expected_input_hash or "").lower()
+        and (commitment.get("input_uri_hash") or "").lower() == (expected_input_uri_hash or "").lower()
+    )
+    if not commitment_valid:
+        raise HTTPException(400, "missing or invalid requester-signed input commitment for this request")
 
     input_hash = synced.get("input_hash") or row.get("input_hash")
     update: dict[str, Any] = {"requester_user": user.id}

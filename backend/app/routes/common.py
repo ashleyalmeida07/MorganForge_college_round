@@ -7,9 +7,11 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable
 
+import base58
+
 from app.chain import indexer
 from app.chain.client import get_chain
-from app.chain.signer import receipt_message, verify_receipt
+from app.chain.signer import input_commitment_message, receipt_message, verify_receipt
 from app.config import settings
 from app.db import download_blob, first, public_url, table
 from app.ipfs import gateway_url
@@ -114,6 +116,10 @@ def db_dispute(pda: str) -> dict[str, Any] | None:
     return first(table("disputes").select("*").eq("request_pda", pda).limit(1).execute())
 
 
+def db_input_commitment(pda: str) -> dict[str, Any] | None:
+    return first(table("input_commitments").select("*").eq("request_pda", pda).limit(1).execute())
+
+
 def db_program(program_hash: str | None) -> dict[str, Any] | None:
     if not program_hash:
         return None
@@ -177,10 +183,11 @@ async def load_bundle(pda: str, *, sync_if_missing: bool = True, live: bool = Tr
     if row is None and chain_req is None:
         return None
 
-    receipt, attestations, dispute = await asyncio.gather(
+    receipt, attestations, dispute, input_commitment = await asyncio.gather(
         asyncio.to_thread(db_receipt, pda),
         asyncio.to_thread(db_attestations, pda),
         asyncio.to_thread(db_dispute, pda),
+        asyncio.to_thread(db_input_commitment, pda),
     )
     program_hash = (chain_req or {}).get("program_hash") or (row or {}).get("program_hash")
     program = await asyncio.to_thread(db_program, program_hash)
@@ -195,6 +202,7 @@ async def load_bundle(pda: str, *, sync_if_missing: bool = True, live: bool = Tr
         "attestations": attestations,
         "dispute": dispute,
         "program": program,
+        "input_commitment": input_commitment,
     }
 
 
@@ -311,6 +319,33 @@ def check_receipt_signature(pda: str, exp: dict[str, Any]) -> dict[str, Any]:
         return {"status": "invalid", "signer": exp.get("provider"), "error": str(e)[:300]}
 
 
+def check_input_commitment(b: dict[str, Any], exp: dict[str, Any]) -> dict[str, Any]:
+    """Verify the Requester's wallet signature over (program_hash, input_hash, input_uri_hash)."""
+    commitment = b.get("input_commitment")
+    if not commitment:
+        return {"status": "missing"}
+    needed = ("program_hash", "input_hash", "input_uri_hash")
+    if any(not exp.get(k) for k in needed):
+        return {"status": "unknown", "error": "incomplete commitments to check against"}
+    mismatches = [k for k in needed if (commitment.get(k) or "").lower() != (exp[k] or "").lower()]
+    if mismatches:
+        return {"status": "tampered", "mismatches": mismatches, "signer": commitment.get("requester_pubkey")}
+    try:
+        msg = input_commitment_message(
+            bytes.fromhex(exp["program_hash"]), bytes.fromhex(exp["input_hash"]), bytes.fromhex(exp["input_uri_hash"])
+        )
+        sig = base58.b58decode(commitment["signature"])
+        ok = verify_receipt(commitment["requester_pubkey"], msg, sig)
+        return {
+            "status": "valid" if ok else "invalid",
+            "signer": commitment.get("requester_pubkey"),
+            "message_hex": msg.hex(),
+            "signature": commitment.get("signature"),
+        }
+    except Exception as e:  # noqa: BLE001
+        return {"status": "invalid", "signer": commitment.get("requester_pubkey"), "error": str(e)[:300]}
+
+
 async def compute_integrity(b: dict[str, Any]) -> dict[str, Any]:
     """Re-hash every stored blob against the on-chain commitments."""
     pda = b["pda"]
@@ -343,6 +378,7 @@ async def compute_integrity(b: dict[str, Any]) -> dict[str, Any]:
         input_uri = {"status": "unknown"}
 
     signature = await asyncio.to_thread(check_receipt_signature, pda, exp)
+    input_commitment = check_input_commitment(b, exp)
 
     db_vs_chain: dict[str, Any] = {"status": "unknown", "mismatches": []}
     if ch and row:
@@ -355,7 +391,7 @@ async def compute_integrity(b: dict[str, Any]) -> dict[str, Any]:
             mism.append("status (db lagging chain)")
         db_vs_chain = {"status": "ok" if not mism else "drift", "mismatches": mism}
 
-    statuses = [program["status"], input_["status"], input_uri["status"], signature["status"]]
+    statuses = [program["status"], input_["status"], input_uri["status"], signature["status"], input_commitment["status"]]
     if has_receipt:
         statuses.append(output["status"])
     if any(s in ("tampered", "invalid") for s in statuses):
@@ -373,6 +409,7 @@ async def compute_integrity(b: dict[str, Any]) -> dict[str, Any]:
         "input_uri": input_uri,
         "output": output,
         "receipt_signature": signature,
+        "input_commitment": input_commitment,
         "db_vs_chain": db_vs_chain,
         "checked_at": datetime.now(timezone.utc).isoformat(),
     }

@@ -14,15 +14,17 @@ import logging
 import time
 from typing import Any
 
+import base58
 from solders.keypair import Keypair
 
 from app.chain import keys
 from app.chain.client import ChainError, get_chain
-from app.chain.signer import receipt_message, sign_receipt
+from app.chain.signer import input_commitment_message, receipt_message, sign_receipt, verify_receipt
 from app.config import settings
 from app.db import BUCKET_OUTPUTS, CHAOS_FLAGS, chaos, upload_blob
 from app.engine import runner
 from app.ipfs import pin_bytes
+from app.routes.common import db_input_commitment
 from app.utils import canonical, sha256, sha256_hex
 from app.workers.common import (
     Backoff,
@@ -148,6 +150,28 @@ async def provider_tick() -> dict[str, Any]:
     return stats
 
 
+def _has_valid_input_commitment(
+    pda: str, program_hash_hex: str, input_hash_hex: str, input_uri_hash_hex: str | None
+) -> bool:
+    """Defense-in-depth re-check: `confirm_request` already enforces this at creation time."""
+    commitment = db_input_commitment(pda)
+    if not commitment or not input_uri_hash_hex:
+        return False
+    if (
+        (commitment.get("program_hash") or "").lower() != program_hash_hex
+        or (commitment.get("input_hash") or "").lower() != input_hash_hex
+        or (commitment.get("input_uri_hash") or "").lower() != input_uri_hash_hex
+    ):
+        return False
+    try:
+        msg = input_commitment_message(
+            bytes.fromhex(program_hash_hex), bytes.fromhex(input_hash_hex), bytes.fromhex(input_uri_hash_hex)
+        )
+        return verify_receipt(commitment["requester_pubkey"], msg, base58.b58decode(commitment["signature"]))
+    except Exception:  # noqa: BLE001
+        return False
+
+
 async def _process(chain: Any, kp: Keypair, req: dict, needs_claim: bool) -> bool:
     pda: str = req["pda"]
     me = str(kp.pubkey())
@@ -164,6 +188,20 @@ async def _process(chain: Any, kp: Keypair, req: dict, needs_claim: bool) -> boo
             return False
         logger.info("claimed request %s (tx %s)", pda, claim_sig)
         await safe_sync_request(pda, claim_sig)
+
+    # ---------------------------------------------------------- integrity: requester's input commitment
+    input_uri_hash_hex: str | None = (req.get("input_uri_hash") or "").lower() or None
+    if not await run_in_thread(_has_valid_input_commitment, pda, program_hash_hex, input_hash_hex, input_uri_hash_hex):
+        logger.error("missing/invalid requester input commitment for %s", pda)
+        await safe_append_event(
+            "InputCommitmentMissing",
+            {"expected_program_hash": program_hash_hex, "expected_input_hash": input_hash_hex,
+             "detected_by": "provider", "action": "aborted; no receipt submitted"},
+            request_pda=pda,
+            actor=me,
+        )
+        _abandon(pda, "missing or invalid requester input commitment")
+        return False
 
     flags = _active_flags()
     swap = "PROVIDER_SWAP_PROGRAM" in flags

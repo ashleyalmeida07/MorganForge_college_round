@@ -37,3 +37,15 @@ export function fromHex(h: string): Uint8Array {
 export async function sha256Hex(data: Uint8Array | string): Promise<string> {
   return toHex(await sha256(data));
 }
+
+export const toBase64 = (b: Uint8Array) => btoa(String.fromCharCode(...b));
+
+export function concatBytes(...chunks: Uint8Array[]): Uint8Array {
+  const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+  let offset = 0;
+  for (const c of chunks) {
+    out.set(c, offset);
+    offset += c.length;
+  }
+  return out;
+}

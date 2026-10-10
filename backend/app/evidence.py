@@ -28,7 +28,7 @@ def _json_bytes(obj: Any) -> bytes:
 
 
 def _verify_md(pda: str, exp: dict[str, Any], uris: dict[str, Any], integrity: dict[str, Any],
-               files: dict[str, str], tx_sigs: list[str]) -> str:
+               files: dict[str, str], tx_sigs: list[str], commitment: dict[str, Any] | None) -> str:
     cluster = settings.cluster
 
     def v(x: Any) -> str:
@@ -71,6 +71,7 @@ def _verify_md(pda: str, exp: dict[str, Any], uris: dict[str, Any], integrity: d
         f"| input URI hash | {integrity.get('input_uri', {}).get('status')} |",
         f"| output.json hash | {integrity.get('output', {}).get('status')} |",
         f"| receipt signature | {integrity.get('receipt_signature', {}).get('status')} |",
+        f"| requester input commitment | {integrity.get('input_commitment', {}).get('status')} |",
         "",
         "Do not trust this table — re-run the checks below yourself.",
         "",
@@ -116,7 +117,9 @@ def _verify_md(pda: str, exp: dict[str, Any], uris: dict[str, Any], integrity: d
         "Browsers can do the same with `WebAssembly.instantiate(wasm, {})` (fuel is not metered there, so",
         "compare `output_hash` only).",
         "",
-        "## 6. Re-check the provider's receipt signature",
+        "## 6. Re-check signatures",
+        "",
+        "### 6.1 Provider's receipt signature",
         "",
         "The provider signs `b\"VERITY_RECEIPT_V1\" + request_pda(32 bytes) + program_hash(32) + input_hash(32)",
         "+ output_hash(32) + trace_root(32) + fuel_used(u64 little-endian)` with its Ed25519 key.",
@@ -131,6 +134,21 @@ def _verify_md(pda: str, exp: dict[str, Any], uris: dict[str, Any], integrity: d
         "```",
         "",
         "The same check was enforced on-chain through the Ed25519 precompile when the receipt was submitted.",
+        "",
+        "### 6.2 Requester's input commitment (off-chain, see `input_commitment.json`)",
+        "",
+        "Before `create_request` was ever sent, the requester's wallet signed",
+        "`b\"VERITY_INPUT_V1\" + program_hash(32) + input_hash(32) + input_uri_hash(32)` — proof of exactly what",
+        "was asked for, independent of reading the chain.",
+        "",
+        "```python",
+        "import base58, nacl.signing",
+        f"msg = (b'VERITY_INPUT_V1' + bytes.fromhex('{v((commitment or {}).get('program_hash'))}')",
+        f"       + bytes.fromhex('{v((commitment or {}).get('input_hash'))}')",
+        f"       + bytes.fromhex('{v((commitment or {}).get('input_uri_hash'))}'))",
+        f"nacl.signing.VerifyKey(base58.b58decode('{v((commitment or {}).get('requester_pubkey'))}'))"
+        f".verify(msg, base58.b58decode('{v((commitment or {}).get('signature'))}'))",
+        "```",
         "",
         "## 7. Re-check the hash-chained audit log",
         "",
@@ -196,6 +214,7 @@ async def build_evidence_zip(request_pda: str) -> tuple[bytes, str] | None:
     entries["attestations.json"] = _json_bytes(b.get("attestations") or [])
     entries["dispute.json"] = _json_bytes({"chain": b.get("chain_dispute"), "db": b.get("dispute")})
     entries["request.json"] = _json_bytes({"chain": b.get("chain"), "db": b.get("row")})
+    entries["input_commitment.json"] = _json_bytes(b.get("input_commitment"))
     entries["program.json"] = _json_bytes(decorate_program(b.get("program")))
     entries["timeline.json"] = _json_bytes(timeline)
     entries["audit_log.json"] = _json_bytes(audit_rows)
@@ -206,7 +225,9 @@ async def build_evidence_zip(request_pda: str) -> tuple[bytes, str] | None:
     )
 
     digests = {name: sha256_hex(data) for name, data in entries.items()}
-    entries["VERIFY.md"] = _verify_md(pda, exp, uris, integrity, digests, tx_sigs).encode("utf-8")
+    entries["VERIFY.md"] = _verify_md(pda, exp, uris, integrity, digests, tx_sigs, b.get("input_commitment")).encode(
+        "utf-8"
+    )
     manifest = {
         "request_pda": pda,
         "program_id": settings.program_id,

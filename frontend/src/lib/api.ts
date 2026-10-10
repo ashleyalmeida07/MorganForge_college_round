@@ -145,6 +145,37 @@ export interface Me {
   is_admin: boolean;
 }
 
+export interface AuditLogRow {
+  seq: number;
+  event_type: string;
+  request_pda: string | null;
+  actor: string | null;
+  payload: Record<string, unknown>;
+  tx_sig: string | null;
+  slot: number | null;
+  prev_hash: string;
+  row_hash: string;
+  anchored_tx: string | null;
+  created_at: string;
+  explorer?: string | null;
+  request_explorer?: string | null;
+  anchored_explorer?: string | null;
+}
+
+
+export interface AuditVerifyOut {
+  ok: boolean;
+  checked: number;
+  first_bad_seq: number | null;
+  head: string | null;
+  onchain: { latest_audit_root: string | null; audit_root_count: number | null; available: boolean };
+  anchored_row: { seq: number; row_hash: string; anchored_tx: string; created_at: string; explorer?: string | null } | null;
+  root_row: { seq: number; row_hash: string; anchored_tx: string; created_at: string; explorer?: string | null } | null;
+  anchor_matches: boolean | null;
+  anchor_status: "not_anchored" | "root_not_found_in_db" | "ok";
+  ok_overall: boolean;
+}
+
 export interface Health {
   ok: boolean;
   time: string;

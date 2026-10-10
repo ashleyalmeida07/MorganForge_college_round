@@ -1,20 +1,21 @@
 "use client";
 
 import React from 'react';
-import { 
-  LayoutDashboard, 
-  BarChart, 
-  FolderGit2, 
-  Users, 
-  HelpCircle, 
-  BookOpen, 
-  Send, 
+import {
+  LayoutDashboard,
+  BarChart,
+  FolderGit2,
+  Users,
+  HelpCircle,
+  BookOpen,
+  Send,
   Bell,
   Sidebar,
   Home,
   LogOut,
   User as UserIcon,
-  ShieldAlert
+  ShieldAlert,
+  Activity
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -26,6 +27,7 @@ const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/create-job', label: 'Create Job', icon: BarChart },
   { href: '/provider', label: 'Providers', icon: FolderGit2 },
+  { href: '/activity', label: 'Activity', icon: Activity },
 ];
 
 const ACTIVE = 'w-full justify-start h-9 px-3 text-sm bg-slate-100 text-slate-900 font-medium rounded-md hover:bg-slate-200';

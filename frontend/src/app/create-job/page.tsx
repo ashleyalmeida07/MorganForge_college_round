@@ -11,9 +11,11 @@ import { AppShell } from '@/components/ui/efferd-dashboard-2-utils/app-shell';
 
 import { useApi, useVerityProgram } from '@/lib/hooks';
 import { apiPost, ApiError, type PrepareOut, type Program } from '@/lib/api';
-import { canonicalJson, sha256Hex } from '@/lib/hash';
-import { createRequest, LAMPORTS_PER_SOL, shortKey } from '@/lib/solana';
+import { canonicalJson, concatBytes, fromHex, sha256Hex, toBase64 } from '@/lib/hash';
+import { createRequest, predictRequestPda, LAMPORTS_PER_SOL, shortKey } from '@/lib/solana';
 import { explorerAddress, explorerTx } from '@/lib/env';
+
+const INPUT_COMMITMENT_DOMAIN = new TextEncoder().encode('VERITY_INPUT_V1');
 
 const SELECT_CLASS =
   'w-full appearance-none rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-shadow';
@@ -54,7 +56,7 @@ interface Success {
 
 export default function CreateJobPage() {
   const { data: programs, error: programsError, loading: programsLoading } = useApi<Program[]>('/programs');
-  const { publicKey, connected } = useWallet();
+  const { publicKey, connected, signMessage } = useWallet();
   const verity = useVerityProgram();
 
   const [programHash, setProgramHash] = useState('');
@@ -165,17 +167,46 @@ export default function CreateJobPage() {
         );
       }
 
-      // 3. Sign + send create_request with the connected wallet.
-      setStep('Waiting for wallet signature…');
-      const { requestPda, signature } = await createRequest(verity, {
-        programHash: prep.program_hash_bytes32,
-        inputHash: prep.input_hash_bytes32,
-        inputUriHash: prep.input_uri_hash_bytes32,
-        bountyLamports: Math.round(bountyNum * LAMPORTS_PER_SOL),
-        deadlineUnix: Math.floor(Date.now() / 1000) + deadlineMin * 60,
+      // 3. Sign a requester input commitment: proof of exactly what was asked for,
+      //    independent of trusting the chain or the backend (§4.4 "Plus").
+      if (!signMessage) {
+        throw new Error('This wallet cannot sign messages (required for the input commitment).');
+      }
+      setStep('Predicting request account…');
+      const { request: predictedPda } = await predictRequestPda(verity);
+
+      setStep('Sign input commitment in your wallet…');
+      const commitmentMsg = concatBytes(
+        INPUT_COMMITMENT_DOMAIN,
+        fromHex(prep.program_hash),
+        fromHex(prep.input_hash),
+        fromHex(prep.input_uri_hash),
+      );
+      const commitmentSig = await signMessage(commitmentMsg);
+      await apiPost('/requests/commit-input', {
+        request_pda: predictedPda.toBase58(),
+        requester: publicKey.toBase58(),
+        program_hash: prep.program_hash,
+        input_hash: prep.input_hash,
+        input_uri_hash: prep.input_uri_hash,
+        signature: toBase64(commitmentSig),
       });
 
-      // 4. Confirm with the backend so it indexes and links the request.
+      // 4. Sign + send create_request with the connected wallet, pinned to the same PDA.
+      setStep('Waiting for wallet signature…');
+      const { requestPda, signature } = await createRequest(
+        verity,
+        {
+          programHash: prep.program_hash_bytes32,
+          inputHash: prep.input_hash_bytes32,
+          inputUriHash: prep.input_uri_hash_bytes32,
+          bountyLamports: Math.round(bountyNum * LAMPORTS_PER_SOL),
+          deadlineUnix: Math.floor(Date.now() / 1000) + deadlineMin * 60,
+        },
+        predictedPda,
+      );
+
+      // 5. Confirm with the backend so it indexes and links the request.
       setStep('Confirming with Verity backend…');
       let confirmWarning: string | undefined;
       try {
