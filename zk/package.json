@@ -1,0 +1,16 @@
+{
+  "name": "verity-zk",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Groth16 proof of the Verity payroll rule set (circom + snarkjs), verified on Solana by verity_zk_verifier",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node scripts/test.mjs"
+  },
+  "dependencies": {
+    "circomlib": "2.0.5",
+    "snarkjs": "0.7.5",
+    "ffjavascript": "0.3.1"
+  }
+}

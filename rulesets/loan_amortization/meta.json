@@ -1,0 +1,60 @@
+{
+  "name": "Loan Amortization Schedule (EMI)",
+  "description": "Fixed-rate EMI and full month-by-month amortization schedule using 1e12 fixed-point math. One trace checkpoint per month.",
+  "version": "1.0.0",
+  "language": "rust",
+  "category": "finance",
+  "input_schema": {
+    "type": "object",
+    "required": [
+      "principal_cents",
+      "annual_rate_bps",
+      "months"
+    ],
+    "properties": {
+      "principal_cents": {
+        "type": "integer",
+        "title": "Principal (cents)",
+        "minimum": 1,
+        "default": 50000000,
+        "maximum": 1000000000000
+      },
+      "annual_rate_bps": {
+        "type": "integer",
+        "title": "Annual interest rate (bps)",
+        "minimum": 0,
+        "default": 950,
+        "maximum": 100000
+      },
+      "months": {
+        "type": "integer",
+        "title": "Term (months)",
+        "minimum": 1,
+        "default": 36,
+        "maximum": 600
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "monthly_payment_cents": {
+        "type": "integer"
+      },
+      "total_interest_cents": {
+        "type": "integer"
+      },
+      "total_paid_cents": {
+        "type": "integer"
+      },
+      "schedule": {
+        "type": "array"
+      }
+    }
+  },
+  "example_input": {
+    "principal_cents": 50000000,
+    "annual_rate_bps": 950,
+    "months": 36
+  }
+}

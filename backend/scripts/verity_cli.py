@@ -3,8 +3,10 @@
   python backend/scripts/verity_cli.py verify <request_pda> [--rpc URL] [--api URL]
       Reads Request / Receipt / Attestations straight from Solana, downloads the
       program, input and output blobs from their deterministic public URLs,
-      re-hashes everything, re-executes the WASM locally with wasmtime and checks
-      the provider's Ed25519 receipt signature.
+      re-hashes everything, re-executes the WASM locally with wasmtime, checks
+      the provider's Ed25519 receipt signature, and compares the provider's
+      published execution trace (TRACE_V2 Merkle tree) with the local one to
+      pinpoint the first divergent step.
 
   python backend/scripts/verity_cli.py evidence <bundle.zip>
       Verifies an evidence bundle fully offline: hashes in request.json /
@@ -32,6 +34,7 @@ finally:
     os.chdir(_cwd)
 
 from app.chain.signer import receipt_message, verify_receipt  # noqa: E402
+from app.engine import trace as tracing  # noqa: E402
 from app.engine.runner import run as run_wasm  # noqa: E402
 from app.utils import sha256_hex  # noqa: E402
 
@@ -215,9 +218,10 @@ async def cmd_verify(args: argparse.Namespace) -> int:
             rep.add("receipt signature (ed25519)", FAIL, f"error: {exc}")
 
     # ---- local re-execution
+    local_res = None
     if wasm is not None and input_bytes is not None:
         try:
-            res = run_wasm(wasm, input_bytes, fuel_limit=settings.fuel_limit)
+            res = local_res = run_wasm(wasm, input_bytes, fuel_limit=settings.fuel_limit)
             rep.add("local re-execution", INFO,
                     f"output_hash={short(res.output_hash.hex())} fuel={res.fuel_used}")
             if receipt is not None:
@@ -238,6 +242,11 @@ async def cmd_verify(args: argparse.Namespace) -> int:
             rep.add("local re-execution", FAIL, f"{type(exc).__name__}: {exc}")
     else:
         rep.add("local re-execution", SKIP, "program or input blob unavailable")
+
+    # ---- execution trace (TRACE_V2)
+    if receipt is not None:
+        trace_bytes, src = fetch.get(f"outputs/{pda}.trace.json")
+        check_trace(rep, trace_bytes, src, receipt["trace_root"], local_res, args.show_trace)
 
     # ---- attestations / quorum
     quorum = int((cfg or {}).get("required_attestations") or 0)
@@ -264,6 +273,54 @@ async def cmd_verify(args: argparse.Namespace) -> int:
 
     rep.print()
     return 1 if rep.failed else 0
+
+
+# ====================================================================== trace
+
+def check_trace(rep: Report, trace_bytes: bytes | None, src: str, onchain_root: str,
+                local_res: Any, show: bool = False) -> None:
+    """Published provider trace vs chain commitment vs local re-execution."""
+    onchain_root = str(onchain_root).lower()
+    doc = None
+    if trace_bytes is None:
+        rep.add("published trace", WARN, f"unavailable ({src})")
+    else:
+        try:
+            doc = json.loads(trace_bytes)
+            chk = tracing.check_document(doc)
+            rep.ok("published trace self-consistent", not chk["errors"], f"{doc.get('leaf_count')} steps",
+                   "; ".join(chk["errors"][:3]))
+            rep.ok("published trace root == chain trace_root", chk["trace_root"] == onchain_root,
+                   short(chk["trace_root"]),
+                   f"published {short(chk['trace_root'])} != chain {short(onchain_root)} (trace tampered)")
+        except Exception as exc:
+            rep.add("published trace", FAIL, f"unparseable: {exc}")
+            doc = None
+    if local_res is None:
+        return
+    mine = local_res.trace_document()
+    rep.add("local trace", INFO, f"{mine['leaf_count']} steps root={short(mine['trace_root'])}")
+    if show:
+        for st in mine["steps"]:
+            label = st.get("label") or st["kind"]
+            print(f"  step {st['index']:>4} {label:<14} leaf={short(st['leaf'], 8)} {st.get('data', '')[:90]}")
+    if doc and doc.get("steps"):
+        theirs = [st.get("leaf", "") for st in doc["steps"]]
+        ours = [st["leaf"] for st in mine["steps"]]
+        idx = tracing.first_divergence(theirs, ours)
+        if idx is None:
+            rep.add("first divergent step", PASS, f"none: all {len(ours)} steps agree")
+        else:
+            m = mine["steps"][idx] if idx < len(ours) else {}
+            p = doc["steps"][idx] if idx < len(theirs) else {}
+            label = m.get("label") or p.get("label") or m.get("kind") or p.get("kind")
+            rep.add("first divergent step", FAIL,
+                    f"step {idx}/{max(len(ours), len(theirs)) - 1} ({label}); {idx} earlier steps agree")
+            if m.get("data") or p.get("data"):
+                rep.add("  provider state", INFO, str(p.get("data") or p.get("step_hash") or "-")[:110])
+                rep.add("  independent state", INFO, str(m.get("data") or m.get("step_hash") or "-")[:110])
+            proof = tracing.merkle_proof([bytes.fromhex(x) for x in ours], idx) if idx < len(ours) else []
+            rep.add("  merkle proof (local)", INFO, f"{len(proof)} siblings -> local root {short(mine['trace_root'])}")
 
 
 # ====================================================================== evidence (offline)
@@ -371,9 +428,10 @@ def cmd_evidence(args: argparse.Namespace) -> int:
         rep.ok("output hash", got == str(output_hash).lower(), f"{output_item[0]} {short(got)}",
                f"OUTPUT TAMPERED: {short(got)} != receipt {short(output_hash)}")
 
+    local_res = None
     if wasm_item and input_item:
         try:
-            res = run_wasm(wasm_item[1], input_item[1], fuel_limit=settings.fuel_limit)
+            res = local_res = run_wasm(wasm_item[1], input_item[1], fuel_limit=settings.fuel_limit)
             rep.add("local re-execution", INFO, f"output_hash={short(res.output_hash.hex())} fuel={res.fuel_used}")
             if output_hash:
                 rep.ok("re-exec output_hash == receipt", res.output_hash.hex() == str(output_hash).lower(),
@@ -391,6 +449,10 @@ def cmd_evidence(args: argparse.Namespace) -> int:
             rep.add("local re-execution", FAIL, f"{type(exc).__name__}: {exc}")
     else:
         rep.add("local re-execution", SKIP, "program or input missing")
+
+    if trace_root:
+        trace_file = next((d for n, d in files.items() if Path(n).name == "trace.json"), None)
+        check_trace(rep, trace_file, "trace.json not in bundle", str(trace_root), local_res)
 
     if all(v is not None for v in (pda, program_hash, input_hash, output_hash, trace_root, fuel_used,
                                    signature, provider)):
@@ -412,7 +474,10 @@ def cmd_evidence(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(prog="verity_cli", description="Verity offline verifier")
+    for stream in (sys.stdout, sys.stderr):  # Windows consoles default to cp1252
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+    ap = argparse.ArgumentParser(prog="verity-cli", description="Verity offline verifier")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     v = sub.add_parser("verify", help="verify a request against the chain + public blobs")
@@ -422,6 +487,7 @@ def main() -> int:
     v.add_argument("--program-id", default=None, help="override PROGRAM_ID")
     v.add_argument("--supabase-url", default=None, help="override SUPABASE_URL for public blob URLs")
     v.add_argument("--show-output", action="store_true", help="print the re-computed output JSON")
+    v.add_argument("--show-trace", action="store_true", help="print every step of the local execution trace")
 
     e = sub.add_parser("evidence", help="verify an evidence bundle zip fully offline")
     e.add_argument("zip")

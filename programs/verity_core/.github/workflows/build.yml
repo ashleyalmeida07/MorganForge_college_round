@@ -1,6 +1,6 @@
 name: test-deploy
-# 1. Build the verity_core Anchor program.
-# 2. Run the full setup + end-to-end smoke test against a LOCAL validator.
+# 1. Build verity_core + verity_zk_verifier; native Groth16 verifier tests.
+# 2. Setup + end-to-end smoke tests (core + zk) against a LOCAL validator.
 # Devnet deploy is done locally (see DEPLOYMENT.md): public devnet RPC stalls from shared CI IPs.
 # Secrets: DEPLOYER_KEYPAIR, PROGRAM_KEYPAIR, ACTOR_KEYS (provider + verifiers).
 on:
@@ -59,8 +59,12 @@ jobs:
           echo "deployer: $(solana address -k ~/.config/solana/id.json)"
           echo "program:  $(solana address -k target/deploy/verity_core-keypair.json)"
 
+
       - name: Build
         run: anchor build
+
+      - name: Native Groth16 verifier tests (snarkjs fixture)
+        run: cargo test -p verity_zk_verifier --test groth16_fixture
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -70,23 +74,29 @@ jobs:
             target/deploy/verity_core.so
             target/idl/verity_core.json
             target/types/verity_core.ts
+            target/deploy/verity_zk_verifier.so
+            target/idl/verity_zk_verifier.json
+            target/types/verity_zk_verifier.ts
             Cargo.lock
 
       - name: Install script deps
         run: npm ci --no-audit --no-fund
 
-      - name: TEST on local validator (setup + end-to-end smoke test)
+      - name: TEST on local validator (setup + core smoke test + zk smoke test)
         env:
           DEPLOYER_KEYPAIR: /home/runner/.config/solana/id.json
           RPC_URL: http://127.0.0.1:8899
         run: |
           PID=$(solana address -k target/deploy/verity_core-keypair.json)
+          ZK_PID=A5taiN69gN4EALtyM9X9S7dVMbhA5qo8aejHrfo48mVv
           solana-test-validator --reset --quiet --ledger /tmp/ledger \
-            --bpf-program "$PID" target/deploy/verity_core.so > /tmp/validator.log 2>&1 &
+            --bpf-program "$PID" target/deploy/verity_core.so \
+            --bpf-program "$ZK_PID" target/deploy/verity_zk_verifier.so > /tmp/validator.log 2>&1 &
           for i in $(seq 1 90); do solana cluster-version -u localhost >/dev/null 2>&1 && break; sleep 1; done
           solana cluster-version -u localhost || { tail -50 /tmp/validator.log; exit 1; }
           solana airdrop 100 -u localhost -k ~/.config/solana/id.json
           node scripts/setup-devnet.mjs
           node scripts/smoke-test.mjs
+          PAYROLL_PROGRAM_HASH=$(printf 'ci-payroll-wasm' | sha256sum | cut -d' ' -f1) node scripts/setup-zk.mjs
+          node scripts/zk-smoke.mjs
           kill %1 || true
-

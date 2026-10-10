@@ -1,0 +1,64 @@
+{
+  "name": "ML Inference: Default-Risk MLP",
+  "description": "A 4-4-1 neural network with fixed-point weights baked into the WASM. Proves the exact model ran: every layer is a trace checkpoint.",
+  "version": "1.0.0",
+  "language": "rust",
+  "category": "ml",
+  "input_schema": {
+    "type": "object",
+    "required": [
+      "annual_income_thousands",
+      "debt_to_income_bps",
+      "credit_history_months",
+      "recent_inquiries"
+    ],
+    "properties": {
+      "annual_income_thousands": {
+        "type": "integer",
+        "title": "Annual income (thousands)",
+        "minimum": 0,
+        "default": 85
+      },
+      "debt_to_income_bps": {
+        "type": "integer",
+        "title": "Debt-to-income (bps)",
+        "minimum": 0,
+        "default": 2800,
+        "maximum": 20000
+      },
+      "credit_history_months": {
+        "type": "integer",
+        "title": "Credit history (months)",
+        "minimum": 0,
+        "default": 48
+      },
+      "recent_inquiries": {
+        "type": "integer",
+        "title": "Recent credit inquiries",
+        "minimum": 0,
+        "default": 1,
+        "maximum": 20
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "probability_default_bps": {
+        "type": "integer"
+      },
+      "decision": {
+        "type": "string"
+      },
+      "hidden_milli": {
+        "type": "array"
+      }
+    }
+  },
+  "example_input": {
+    "annual_income_thousands": 85,
+    "debt_to_income_bps": 2800,
+    "credit_history_months": 48,
+    "recent_inquiries": 1
+  }
+}

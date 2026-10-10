@@ -1,0 +1,12 @@
+[package]
+name = "verity_abi"
+version = "1.0.0"
+edition = "2021"
+description = "Shared Verity rule-set ABI: alloc/compute/trace exports, canonical JSON, checkpoints"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

@@ -16,6 +16,8 @@ services:
         value: https://api.devnet.solana.com   # or a Helius devnet URL
       - key: PROGRAM_ID
         value: ByADChPce9hwCuSak9hFwiiCyndYGj7dkYypm4XYEJL1
+      - key: ZK_PROGRAM_ID
+        value: A5taiN69gN4EALtyM9X9S7dVMbhA5qo8aejHrfo48mVv
       - key: CLUSTER
         value: devnet
       - key: PROVIDER_KEYPAIR_JSON        # JSON array of 64 bytes, or base64 of the 64 bytes

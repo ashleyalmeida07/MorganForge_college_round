@@ -20,8 +20,9 @@ from app.chain import keys
 from app.chain.client import ChainError, get_chain
 from app.chain.signer import receipt_message, sign_receipt
 from app.config import settings
-from app.db import BUCKET_OUTPUTS, CHAOS_FLAGS, chaos, upload_blob
+from app.db import BUCKET_OUTPUTS, CHAOS_FLAGS, chaos, trace_blob_path, upload_blob
 from app.engine import runner
+from app.engine import trace as tracing
 from app.ipfs import pin_bytes
 from app.utils import canonical, sha256, sha256_hex
 from app.workers.common import (
@@ -270,7 +271,7 @@ async def _process(chain: Any, kp: Keypair, req: dict, needs_claim: bool) -> boo
         output_obj = tamper_output(result.output)
         output_bytes = canonical(output_obj)
         output_hash = sha256(output_bytes)
-        trace_root = runner.compute_trace_root(input_bytes, output_bytes, fuel_used)
+        trace_root = runner.compute_trace_root(input_bytes, output_bytes, result.checkpoints)
         mode = "tampered_output" if mode == "honest" else f"{mode}+tampered_output"
         logger.warning("chaos PROVIDER_TAMPER_OUTPUT: corrupted output for %s", pda)
 
@@ -335,6 +336,21 @@ async def _process(chain: Any, kp: Keypair, req: dict, needs_claim: bool) -> boo
             actor="chaos",
         )
 
+    # Publish the execution trace (TRACE_V2) the receipt's trace_root commits to, so any
+    # challenger can locate the first divergent step against their own re-execution.
+    trace_uri = None
+    try:
+        trace_doc = tracing.trace_document(
+            input_bytes, list(result.checkpoints), output_bytes,
+            request_pda=pda, program_hash=executed_program,
+        )
+        trace_doc["fuel_used"] = fuel_used
+        trace_uri = await run_in_thread(
+            upload_blob, BUCKET_OUTPUTS, trace_blob_path(pda), canonical(trace_doc), "application/json"
+        )
+    except Exception as e:
+        record_error(JOB, e, f"upload trace {pda}")
+
     ipfs_cid = None
     try:
         ipfs_cid = await maybe_await(
@@ -354,6 +370,8 @@ async def _process(chain: Any, kp: Keypair, req: dict, needs_claim: bool) -> boo
         {
             "output_hash": output_hash.hex(),
             "trace_root": trace_root.hex(),
+            "trace_steps": len(result.checkpoints) + 2,
+            "trace_uri": trace_uri,
             "fuel_used": fuel_used,
             "ipfs_cid": ipfs_cid,
             "program_hash": program_hash_hex,

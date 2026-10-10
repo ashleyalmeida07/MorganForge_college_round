@@ -30,6 +30,7 @@ from app.routes.common import (
     load_bundle,
     reexecute,
     safe,
+    trace_report,
 )
 from app.schemas import ConfirmRequestIn, PrepareRequestIn, PrepareRequestOut
 from app.utils import canonical, sha256_hex
@@ -262,6 +263,25 @@ async def get_evidence_zip(pda: str) -> StreamingResponse:
             "Content-Length": str(len(data)),
         },
     )
+
+
+@router.get("/requests/{pda}/trace")
+async def get_trace(pda: str, recompute: bool = Query(default=True)) -> dict[str, Any]:
+    """Published execution trace (TRACE_V2) + first-divergent-step analysis."""
+    b = await load_bundle(pda.strip())
+    if b is None:
+        raise HTTPException(404, "request not found")
+    return await trace_report(b, recompute=recompute)
+
+
+@router.get("/requests/{pda}/zk")
+async def get_zk(pda: str) -> dict[str, Any]:
+    """Groth16 zk-proof status (verity_zk_verifier record) for a payroll request."""
+    from app.chain.zk import zk_status
+
+    b = await load_bundle(pda.strip(), live=False)
+    program_hash = ((b or {}).get("row") or {}).get("program_hash")
+    return await zk_status(pda.strip(), program_hash)
 
 
 @router.post("/requests/{pda}/reverify")

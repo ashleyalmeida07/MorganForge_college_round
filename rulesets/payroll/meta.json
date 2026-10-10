@@ -1,0 +1,60 @@
+{
+  "name": "Payroll Net Pay Calculator",
+  "description": "Gross, tax and net pay from salary, tax rate (basis points) and deductions. Integer cents only. Also available as a Groth16 zk circuit (zk-verified on Solana).",
+  "version": "1.0.0",
+  "language": "rust",
+  "category": "finance",
+  "zk_circuit": "payroll",
+  "input_schema": {
+    "type": "object",
+    "required": [
+      "salary_cents",
+      "tax_bps",
+      "deductions_cents"
+    ],
+    "properties": {
+      "salary_cents": {
+        "type": "integer",
+        "title": "Gross salary (cents)",
+        "minimum": 0,
+        "default": 1000000,
+        "maximum": 1000000000000
+      },
+      "tax_bps": {
+        "type": "integer",
+        "title": "Tax rate (basis points, 100 = 1%)",
+        "minimum": 0,
+        "default": 2000,
+        "maximum": 10000
+      },
+      "deductions_cents": {
+        "type": "integer",
+        "title": "Deductions (cents)",
+        "minimum": 0,
+        "default": 50000
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "gross_cents": {
+        "type": "integer"
+      },
+      "tax_cents": {
+        "type": "integer"
+      },
+      "deductions_cents": {
+        "type": "integer"
+      },
+      "net_cents": {
+        "type": "integer"
+      }
+    }
+  },
+  "example_input": {
+    "salary_cents": 1000000,
+    "tax_bps": 2000,
+    "deductions_cents": 50000
+  }
+}

@@ -36,3 +36,22 @@ DEPLOYER_KEYPAIR=keys/deployer.json node scripts/setup-devnet.mjs   # idempotent
 DEPLOYER_KEYPAIR=keys/deployer.json node scripts/smoke-test.mjs
 ```
 Deploying from GitHub Actions to public devnet stalls (RPC rate limits on shared runner IPs); deploy locally or use a dedicated RPC (Helius) URL.
+
+## verity_zk_verifier (Groth16 payroll proofs) — devnet
+
+| Item | Value |
+|---|---|
+| Program ID | `A5taiN69gN4EALtyM9X9S7dVMbhA5qo8aejHrfo48mVv` (keypair `keys/verity_zk_verifier-keypair.json`) |
+| Deploy tx | `2CdDXH9z6S1fSuBtZn9fwjDso2gLci42bnBsvyPi2LVpgjYY6jvmiMDM26vDu1zt3KnLqBLhDvU7kidWEC2bEtNC` |
+| ZkConfig PDA (`"zk_config"`) | `HosLLX2aiqNVBtFTtH7nDGTBnq7HLSUkpZ3iSA1oRKFC`, payroll program hash `d74c9d44eb9e66521303b9ac2d109e8cebbfb4afa5fd13fc16a04d12465c936c` |
+| First devnet proof | request `9maChiY26oWFFUauVdvBQfm4Yo3hCAcHdM3gexwsQ2dN` (tampered receipt) → zk fraud proof record `BEtxnWxs2NANh5DM18zQhi6KvCApHZqWXQhnnMWvPzsi` |
+
+Circuit, setup and verifying key: `zk/` (`npm run build` regenerates `src/vk.rs`, `zk-artifacts/` and `frontend/public/zk/`; a new setup **requires a redeploy**).
+
+```
+solana program deploy target/deploy/verity_zk_verifier.so --program-id keys/verity_zk_verifier-keypair.json \
+  --upgrade-authority keys/deployer.json -k keys/deployer.json -u devnet --with-compute-unit-price 50000
+DEPLOYER_KEYPAIR=keys/deployer.json PAYROLL_PROGRAM_HASH=<sha256 of rulesets/payroll/payroll.wasm> node scripts/setup-zk.mjs
+DEPLOYER_KEYPAIR=keys/deployer.json SUPABASE_URL=https://<project>.supabase.co node scripts/zk-prove.mjs <request_pda>
+```
+Deploy without `--use-rpc`: buffer writes over the public RPC hit 429 rate limits; the default TPU/QUIC path succeeds.
