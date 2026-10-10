@@ -7,7 +7,7 @@ import { Gavel, Loader2, Sparkles, Timer } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { apiPost } from "@/lib/api";
+import { apiPost, type DisputePrepareOut } from "@/lib/api";
 import { explorerTx } from "@/lib/env";
 import { fromHex } from "@/lib/hash";
 import { lamportsToSol, openDispute, useVerityProgram } from "@/lib/solana";
@@ -113,9 +113,11 @@ export function DisputePanel({
   challenge: ChallengeInfo | null;
   onDone?: () => void;
 }) {
-  const { connected } = useWallet();
+  const { connected, publicKey } = useWallet();
   const program = useVerityProgram();
   const [hash, setHash] = useState("");
+  // Backend preflight warnings for the current hash; null = not checked yet. Shown once, then "Stake anyway".
+  const [warnings, setWarnings] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sig, setSig] = useState<string | null>(null);
@@ -139,6 +141,15 @@ export function DisputePanel({
     setBusy(true);
     setError(null);
     try {
+      if (warnings === null) {
+        const prep = await apiPost<DisputePrepareOut>("/disputes/prepare", {
+          request_pda: pda,
+          claimed_output_hash: clean,
+          challenger: publicKey?.toBase58(),
+        });
+        setWarnings(prep.warnings ?? []);
+        if (prep.warnings?.length) return;
+      }
       const s = await openDispute(program, new PublicKey(pda), Array.from(fromHex(clean)));
       setSig(s);
       onDone?.();
@@ -178,7 +189,10 @@ export function DisputePanel({
                 <input
                   id="claimed-hash"
                   value={hash}
-                  onChange={(e) => setHash(e.target.value)}
+                  onChange={(e) => {
+                    setHash(e.target.value);
+                    setWarnings(null);
+                  }}
                   placeholder="64-char hex sha256 of the correct output"
                   spellCheck={false}
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-xs text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -193,13 +207,20 @@ export function DisputePanel({
                 Stake: {challenge?.min_dispute_stake != null ? `${lamportsToSol(challenge.min_dispute_stake)} SOL` : "the configured minimum"}{" "}
                 (lost if the dispute is frivolous).
               </p>
+              {warnings && warnings.length > 0 && (
+                <ul className="space-y-1 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                  {warnings.map((w) => (
+                    <li key={w}>{w}</li>
+                  ))}
+                </ul>
+              )}
               <Button
                 onClick={submit}
                 disabled={busy || !valid || sameAsReceipt}
                 className="h-auto rounded-lg bg-orange-600 px-5 py-2.5 font-semibold text-white hover:bg-orange-700"
               >
                 {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {busy ? "Opening dispute…" : "Stake & open dispute"}
+                {busy ? "Opening dispute…" : warnings?.length ? "Stake anyway" : "Stake & open dispute"}
               </Button>
             </>
           )}

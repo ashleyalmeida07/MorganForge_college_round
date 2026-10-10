@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     # App
     frontend_origin: str = "http://localhost:3000"
     admin_emails: str = "support@arhamfintech.ai"
+    # Optional shared secret accepted as an admin bearer token off-mainnet (local/E2E runs only). Leave empty in deployments.
+    dev_admin_token: str = ""
     workers_enabled: bool = True
     provider_interval_secs: int = 8
     verifier_interval_secs: int = 8

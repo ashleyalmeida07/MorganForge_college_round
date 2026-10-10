@@ -58,6 +58,11 @@ export function WalletButton() {
     setMsg(null);
     try {
       const { nonce, message } = await apiPost<{ nonce: string; message: string }>("/auth/wallet/nonce", { wallet: address });
+      // Only sign a Sign-In-With-Solana message bound to this site and this wallet.
+      const [domainLine, addressLine] = message.split("\n");
+      if (domainLine !== `${window.location.host} wants you to sign in with your Solana account:` || addressLine !== address) {
+        throw new Error("Refusing to sign: the link message is not for this site and wallet");
+      }
       const sig = await signMessage(new TextEncoder().encode(message));
       await apiPost("/auth/wallet/link", { wallet: address, signature: toBase64(sig), nonce });
       setLinked(true);

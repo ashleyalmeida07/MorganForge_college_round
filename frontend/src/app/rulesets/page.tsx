@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Boxes, FileCode2, Loader2, Play, Sigma } from "lucide-react";
+import { Boxes, FileCode2, Loader2, Play, Sigma, Upload } from "lucide-react";
 
 import { AppShell } from "@/components/ui/efferd-dashboard-2-utils/app-shell";
 import type { ProgramInfo } from "@/components/verify/types";
@@ -89,18 +89,26 @@ function RuleSetCard({ p }: { p: ProgramInfo }) {
 }
 
 export default function RuleSetsPage() {
-  const { data, error, loading } = useApi<ProgramInfo[]>("/programs");
+  const { data, error, loading } = useApi<ProgramInfo[]>("/programs", undefined, [{ table: "programs" }]);
   return (
     <AppShell>
       <div className="pb-10">
-        <div className="mb-8">
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
-            <Boxes className="h-6 w-6 text-blue-600" aria-hidden /> Rule Sets
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Deterministic WASM programs, each identified by the SHA-256 of its bytecode. Anyone can download one and re-execute any request
-            that used it.
-          </p>
+        <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
+              <Boxes className="h-6 w-6 text-blue-600" aria-hidden /> Rule Sets
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Deterministic WASM programs, each identified by the SHA-256 of its bytecode. Anyone can download one and re-execute any
+              request that used it.
+            </p>
+          </div>
+          <Link
+            href="/rulesets/new"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+          >
+            <Upload className="h-3.5 w-3.5" aria-hidden /> Register rule set
+          </Link>
         </div>
         {loading && !data ? (
           <p className="flex items-center gap-2 text-sm text-slate-500">

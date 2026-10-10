@@ -36,6 +36,12 @@ log = logging.getLogger("verity")
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     log.info("Verity API starting (cluster=%s, program=%s)", settings.cluster, settings.program_id)
+    try:
+        from app.db import load_chaos_flags
+
+        load_chaos_flags(force=True)
+    except Exception:  # noqa: BLE001 - flags fall back to all-off in memory
+        log.exception("failed to restore chaos flags")
     started = False
     try:
         from app.workers.scheduler import start_scheduler

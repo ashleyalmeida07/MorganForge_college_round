@@ -1,1523 +1,415 @@
-/* eslint-disable @next/next/no-img-element */
-/* eslint-disable @next/next/no-html-link-for-pages */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
-import React, { useEffect } from "react";
+
+import Link from "next/link";
+import {
+  ArrowRight,
+  Boxes,
+  Cpu,
+  ExternalLink,
+  FileSignature,
+  Fingerprint,
+  Gavel,
+  History,
+  Loader2,
+  LockKeyhole,
+  LogOut,
+  MonitorCheck,
+  ScrollText,
+  ShieldCheck,
+  Sparkles,
+  Swords,
+  Users,
+} from "lucide-react";
+
 import { useAuth } from "@/components/auth/AuthProvider";
-import { User, LogOut } from "lucide-react";
+import type { AuditLogRow, Program, Stats } from "@/lib/api";
+import { env, explorerAddress } from "@/lib/env";
+import { useApi } from "@/lib/hooks";
+import { shortKey } from "@/lib/solana";
 
-export default function Page() {
-  const { user: session, displayName, avatarUrl, signOut } = useAuth();
-  useEffect(() => {
-    let cancelled = false;
+const STEPS = [
+  {
+    icon: Fingerprint,
+    title: "Commit",
+    body: "The requester commits SHA-256 hashes of the exact WASM program and canonical JSON input on Solana, with a bounty in escrow.",
+  },
+  {
+    icon: Cpu,
+    title: "Execute",
+    body: "A staked provider runs the program in a deterministic sandbox: no I/O, no clock, no randomness, metered fuel.",
+  },
+  {
+    icon: FileSignature,
+    title: "Receipt",
+    body: "The provider signs a receipt (output hash, trace root, fuel) with Ed25519. Solana checks the signature on-chain.",
+  },
+  {
+    icon: Users,
+    title: "Re-execute",
+    body: "Independent verifiers, and you in your own browser, re-run the same program on the same input and attest the result.",
+  },
+  {
+    icon: Gavel,
+    title: "Dispute",
+    body: "If the hashes disagree, anyone can stake a challenge. A verifier quorum settles it and the dishonest side is slashed.",
+  },
+];
 
-    const loadScript = (src: string): Promise<void> => {
-      return new Promise((resolve) => {
-        if (typeof document === "undefined") return resolve();
-        const existing = document.querySelector(`script[src="${src}"]`);
-        if (existing) return resolve();
+const GUARANTEES = [
+  {
+    icon: MonitorCheck,
+    title: "Verify in your browser",
+    body: "Re-execute any result locally and compare hashes against the chain. You never have to trust our server.",
+  },
+  {
+    icon: LockKeyhole,
+    title: "Input & output integrity",
+    body: "Every stored artifact is content-addressed and re-hashed on display. Tampering shows up as a red banner.",
+  },
+  {
+    icon: ScrollText,
+    title: "Tamper-evident records",
+    body: "Requests, receipts, attestations and disputes live on Solana. The off-chain audit log is hash-chained and anchored on-chain.",
+  },
+  {
+    icon: History,
+    title: "Execution traceability",
+    body: "A Merkle trace of each run pinpoints the first divergent step, and every lifecycle event links to its transaction.",
+  },
+  {
+    icon: Swords,
+    title: "Adversarially tested",
+    body: "Malicious providers, swapped programs, forged signatures, tampered blobs and lazy verifiers are all caught.",
+  },
+  {
+    icon: Sparkles,
+    title: "Zero-knowledge proofs",
+    body: "Payroll results can be proven with a Groth16 proof verified on Solana, with no re-execution needed.",
+  },
+];
 
-        const script = document.createElement("script");
-        script.src = src;
-        script.async = false;
-        script.onload = () => resolve();
-        script.onerror = () => resolve();
-        document.body.appendChild(script);
-      });
-    };
-
-    async function initScripts() {
-      // Load jQuery and GSAP/ScrollTrigger before Webflow to ensure plugins exist
-      await loadScript("/js/jquery.js?site=69d7f44961b88686fd48eee3");
-      await loadScript("https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js");
-      await loadScript("https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js");
-      await loadScript("https://unpkg.com/split-type");
-
-      try {
-        const w = window as any;
-        if (w.gsap && w.ScrollTrigger) {
-          w.gsap.registerPlugin(w.ScrollTrigger);
-        }
-      } catch (err) {
-        console.warn("GSAP plugin registration error:", err);
-      }
-
-      await loadScript("/js/webflow.schunk.38092a41f577771c.js");
-      await loadScript("/js/webflow-script.js");
-
-      if (cancelled) return;
-
-      setTimeout(() => {
-        try {
-          const w = window as any;
-          if (w.gsap && w.ScrollTrigger) {
-            w.gsap.registerPlugin(w.ScrollTrigger);
-          }
-
-          if (w.gsap && w.SplitType && w.ScrollTrigger) {
-            const splitTypes = document.querySelectorAll(".scroll-highlight");
-            splitTypes.forEach((char) => {
-              const text = new w.SplitType(char, {
-                types: ["chars", "words"],
-              });
-              w.gsap.from(text.chars, {
-                scrollTrigger: {
-                  trigger: char,
-                  start: "top 80%",
-                  end: "top 20%",
-                  scrub: true,
-                  markers: false,
-                },
-                opacity: 0.2,
-                stagger: 0.1,
-              });
-            });
-          }
-        } catch (err) {
-          console.warn("Animation init error:", err);
-        }
-      }, 300);
-    }
-
-    initScripts();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return (
-    <>
-      <div className="page-wrapper">
-        <div className="global-styles w-embed">
-          <style
-            dangerouslySetInnerHTML={{
-              __html: `
-  /* Improve text rendering across browsers */
-  body {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    font-smoothing: antialiased;
-    text-rendering: optimizeLegibility;
-  }
-
-  /* Remove top margin from the first element inside rich text */
-  .w-richtext > :not(div):first-child,
-  .w-richtext > div:first-child > :first-child {
-    margin-top: 0 !important;
-  }
-
-  /* Remove bottom margin from the last element inside rich text */
-  .w-richtext > :last-child,
-  .w-richtext ol li:last-child,
-  .w-richtext ul li:last-child {
-    margin-bottom: 0 !important;
-  }
-
-
-  .blur-overlay {
--webkit-backdrop-filter: blur(12px);
-
-mask-image: linear-gradient(to bottom, transparent 0%, black 100%);
--webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 100%);
+function fmtCount(n: number | null | undefined) {
+  return n === null || n === undefined ? "—" : n.toLocaleString();
 }
-  
-`,
-            }}
-          />
-        </div>
-        <div
-          data-animation="default"
-          className="navbar w-nav"
-          data-wf--navbar--variant="base"
-          data-easing2="ease-in-out-quart"
-          data-easing="ease-in-out-quart"
-          data-collapse="medium"
-          role="banner"
-          data-no-scroll="1"
-          data-duration="400"
-        >
-          <div className="padding-global">
-            <div className="container-large">
-              <div className="navbar-content">
-                <a
-                  href="/"
-                  aria-current="page"
-                  className="navbar-logo-link w-nav-brand w--current"
-                >
-                  <img
-                    loading="eager"
-                    src="images/6e2ce84846bb3c8d4b3feedcb27bdc19_brand-20logo.webp"
-                    alt="Verity Logo Monochrome White"
-                    className="navbar-logo"
-                  />
-                  <img
-                    loading="eager"
-                    src="images/9c19f22f9d3246139caf217ab41f1448_securio-20logo-20dark.webp"
-                    alt="Verity Logo Dark"
-                    className="navbar-logo dark"
-                  />
-                </a>
-                <nav role="navigation" className="navbar-list w-nav-menu">
-                  <div
-                    data-hover="true"
-                    data-delay="0"
-                    className="dropdown w-dropdown"
-                  >
-                    <div className="nav-links w-dropdown-toggle">
-                      <div>Services</div>
-                      <img
-                        src="images/4acd829d4a26e29277a562395d8724d4_arrow-down-white.webp"
-                        loading="lazy"
-                        alt="Arrow Down White"
-                        className="arrow-dropdown"
-                      />
-                      <img
-                        src="images/ac103dd5585266d059ed2e7db00ff68f_arrow-down-dark.webp"
-                        loading="lazy"
-                        alt="Arrow Down Dark"
-                        className="arrow-dropdown dark"
-                      />
-                    </div>
-                    <nav className="menu-open w-dropdown-list">
-                      <div className="menu-content-wrapper">
-                        <div className="navbar-title-wrapper">
-                          <div className="body-s text-color-secondary">
-                            SERVICES
-                          </div>
-                        </div>
-                        <a
-                          href="/proactive-security"
-                          className="wrapper-nav-link w-inline-block"
-                        >
-                          <div className="img-nav-icon">
-                            <img
-                              src="images/8b5d2ef767bb6683f4683ba472fcf895_nav-icon-1.webp"
-                              loading="lazy"
-                              alt="Security"
-                              className="nav-icon"
-                            />
-                          </div>
-                          <div className="dropdown-link">
-                            <div className="body-l">Verifiable Compute</div>
-                            <div className="body-s text-color-secondary">
-                              Optimistic off-chain execution
-                            </div>
-                          </div>
-                        </a>
-                        <a
-                          href="/penetration-testing"
-                          className="wrapper-nav-link w-inline-block"
-                        >
-                          <div className="img-nav-icon">
-                            <img
-                              src="images/ddbae225f2a5b5bb9a9ec63346e738b8_nav-icon-2.webp"
-                              loading="lazy"
-                              alt="Audit"
-                              className="nav-icon"
-                            />
-                          </div>
-                          <div className="dropdown-link">
-                            <div className="body-l">Bisection Protocol</div>
-                            <div className="body-s text-color-secondary">
-                              Interactive on-chain dispute resolution
-                            </div>
-                          </div>
-                        </a>
-                        <a
-                          href="/endpoint-security"
-                          className="wrapper-nav-link w-inline-block"
-                        >
-                          <div className="img-nav-icon">
-                            <img
-                              src="images/81cef5fefe62387e4f956a410dcd7acb_nav-icon-3.webp"
-                              loading="lazy"
-                              alt="Shield"
-                              className="nav-icon"
-                            />
-                          </div>
-                          <div className="dropdown-link">
-                            <div className="body-l">Tamper-Evident</div>
-                            <div className="body-s text-color-secondary">
-                              Merkle-committed execution traces
-                            </div>
-                          </div>
-                        </a>
-                      </div>
-                      <a
-                        href="/contact"
-                        className="wrapper-img-nav-bar w-inline-block"
-                      >
-                        <div className="stack-text-nav-cta">
-                          <div className="h5 text-color-primary-light">
-                            Talk to a <br />
-                            Security Expert
-                          </div>
-                          <div className="body-s text-color-primary-light">
-                            Learn how it works
-                          </div>
-                        </div>
-                        <div className="blur-overlay"></div>
-                        <img
-                          src="images/approach-image.webp"
-                          loading="lazy"
-                          sizes="100vw"
-                          srcSet="images/approach-image-p-500.webp 500w, images/approach-image-p-800.webp 800w, images/approach-image.webp 936w"
-                          alt="Two cybersecurity professionals reviewing security data on a laptop in a modern office."
-                          className="img"
-                        />
-                        <div className="arrow-menu">
-                          <img
-                            src="images/a084a55eae24d51e99625b0713f2ff3a_arrow-white.webp"
-                            loading="lazy"
-                            alt="Arrow"
-                            className="arrow-link absolute nav"
-                          />
-                          <img
-                            src="images/a084a55eae24d51e99625b0713f2ff3a_arrow-white.webp"
-                            loading="lazy"
-                            alt="Arrow"
-                            className="arrow-link nav"
-                          />
-                        </div>
-                      </a>
-                    </nav>
-                  </div>
-                  <div
-                    data-hover="true"
-                    data-delay="0"
-                    className="dropdown w-dropdown"
-                  >
-                    <div className="nav-links w-dropdown-toggle">
-                      <div>Why Verity</div>
-                      <img
-                        src="images/4acd829d4a26e29277a562395d8724d4_arrow-down-white.webp"
-                        loading="lazy"
-                        alt="Arrow Down White"
-                        className="arrow-dropdown"
-                      />
-                      <img
-                        src="images/ac103dd5585266d059ed2e7db00ff68f_arrow-down-dark.webp"
-                        loading="lazy"
-                        alt="Arrow Down Dark"
-                        className="arrow-dropdown dark"
-                      />
-                    </div>
-                    <nav className="menu-open w-dropdown-list">
-                      <div className="menu-content-wrapper">
-                        <div className="navbar-title-wrapper">
-                          <div className="body-s text-color-secondary">
-                            WHY VERITY
-                          </div>
-                        </div>
-                        <a
-                          href="/about"
-                          className="wrapper-nav-link w-inline-block"
-                        >
-                          <div className="img-nav-icon">
-                            <img
-                              src="images/51b6166e49464bf3348f13bf5ecd0d6f_about-nav-icon.webp"
-                              loading="lazy"
-                              alt="About"
-                              className="nav-icon"
-                            />
-                          </div>
-                          <div className="dropdown-link">
-                            <div className="body-l">About</div>
-                            <div className="body-s text-color-secondary">
-                              Our mission, values, and experience
-                            </div>
-                          </div>
-                        </a>
-                        <a
-                          href="/certifications"
-                          className="wrapper-nav-link w-inline-block"
-                        >
-                          <div className="img-nav-icon">
-                            <img
-                              src="images/678cb6b9a680a4a9a905e7370ebbe399_certifications-nav-icon.webp"
-                              loading="lazy"
-                              alt="Certifications"
-                              className="nav-icon"
-                            />
-                          </div>
-                          <div className="dropdown-link">
-                            <div className="body-l">Certifications</div>
-                            <div className="body-s text-color-secondary">
-                              Validated skills you can trust
-                            </div>
-                          </div>
-                        </a>
-                        <a
-                          href="/careers"
-                          className="wrapper-nav-link w-inline-block"
-                        >
-                          <div className="img-nav-icon">
-                            <img
-                              src="images/bf83a1bea8fc5c0c53c0a66d6379e36f_careers-nav-icon.webp"
-                              loading="lazy"
-                              alt="Careers"
-                              className="nav-icon"
-                            />
-                          </div>
-                          <div className="dropdown-link">
-                            <div className="body-l">Careers</div>
-                            <div className="body-s text-color-secondary">
-                              Join a team focused on real impact
-                            </div>
-                          </div>
-                        </a>
-                      </div>
-                      <a
-                        href="/contact"
-                        className="wrapper-img-nav-bar w-inline-block"
-                      >
-                        <div className="stack-text-nav-cta">
-                          <div className="h5 text-color-primary-light">
-                            Talk to a <br />
-                            Security Expert
-                          </div>
-                          <div className="body-s text-color-primary-light">
-                            Learn how it works
-                          </div>
-                        </div>
-                        <div className="blur-overlay"></div>
-                        <img
-                          src="images/approach-image.webp"
-                          loading="lazy"
-                          sizes="100vw"
-                          srcSet="images/approach-image-p-500.webp 500w, images/approach-image-p-800.webp 800w, images/approach-image.webp 936w"
-                          alt="Two cybersecurity professionals reviewing security data on a laptop in a modern office."
-                          className="img"
-                        />
-                        <div className="arrow-menu">
-                          <img
-                            src="images/a084a55eae24d51e99625b0713f2ff3a_arrow-white.webp"
-                            loading="lazy"
-                            alt="Arrow"
-                            className="arrow-link absolute nav"
-                          />
-                          <img
-                            src="images/a084a55eae24d51e99625b0713f2ff3a_arrow-white.webp"
-                            loading="lazy"
-                            alt="Arrow"
-                            className="arrow-link nav"
-                          />
-                        </div>
-                      </a>
-                    </nav>
-                  </div>
-                  <a href="/case-study" className="nav-links w-nav-link">
-                    Case Studies
-                  </a>
-                  <a href="/contact" className="nav-links w-nav-link">
-                    Contact
-                  </a>
-                </nav>
-                <div className="nav-button-wrap">
-                  <div className="nav-button-wrap-small hide-mobile-landscape">
-                    {session ? (
-                      <div className="flex items-center gap-2">
-                        <a href="/dashboard" className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition bg-white/10 py-1.5 px-3 rounded-full border border-white/20">
-                          {avatarUrl ? (
-                            <img src={avatarUrl} alt={displayName || "User"} className="w-6 h-6 rounded-full" />
-                          ) : (
-                            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-                              <User className="w-3.5 h-3.5" />
-                            </div>
-                          )}
-                          <span className="text-sm font-medium text-white">{displayName || "My account"}</span>
-                        </a>
-                        <button
-                          onClick={signOut}
-                          className="flex items-center gap-1 text-xs text-white/70 hover:text-white px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 transition cursor-pointer"
-                          title="Log Out"
-                        >
-                          <LogOut className="w-3.5 h-3.5" />
-                          <span>Log Out</span>
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="dark-button">
-                          <a
-                            data-wf--button-primary--variant="nab-button-white"
-                            href="/signup"
-                            className="button w-variant-aa6af711-3d52-389d-f297-64d1b6b6f76e w-inline-block"
-                          >
-                            <div className="button-wrap-out">
-                              <div className="button-wrap-in">
-                                <div className="body-m">Login / Sign Up</div>
-                                <div className="body-m position-absolute">
-                                  Login / Sign Up
-                                </div>
-                              </div>
-                            </div>
-                          </a>
-                        </div>
-                        <div className="light-button">
-                          <a
-                            data-wf--button-primary--variant="nav-button"
-                            href="/signup"
-                            className="button w-variant-5a46ce55-4c6d-4c1d-722e-9c9b6b1dd13a w-inline-block"
-                          >
-                            <div className="button-wrap-out">
-                              <div className="button-wrap-in">
-                                <div className="body-m">Login / Sign Up</div>
-                                <div className="body-m position-absolute">
-                                  Login / Sign Up
-                                </div>
-                              </div>
-                            </div>
-                          </a>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                  <div className="menu-button w-nav-button">
-                    <div className="nav-button-component">
-                      <div className="nav-button-line is-first"></div>
-                      <div className="nav-button-line is-third"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="main-wrapper">
-          <div className="section-hero-home">
-            <div className="gradient-background">
-              <img
-                src="images/f12e82d4b32bc32107e10535267eb88f_dark-circle.avif"
-                loading="eager"
-                sizes="(max-width: 2400px) 100vw, 2400px"
-                srcSet="images/f12e82d4b32bc32107e10535267eb88f_dark-circle-p-500.avif 500w, images/f12e82d4b32bc32107e10535267eb88f_dark-circle-p-800.avif 800w, images/f12e82d4b32bc32107e10535267eb88f_dark-circle.avif 2400w"
-                alt="Dark Gradient"
-                className="dark-circle"
-              />
-              <img
-                src="images/122b690b3a172c6eb9951588b1844a3e_blue-circle.avif"
-                loading="eager"
-                alt="Blue Gradient"
-                className="primary-circle"
-              />
-              <div className="dots-vector"></div>
-              <div className="dots-vector"></div>
-              <img
-                src="images/56c71daa9866842d3ee5787a28d055a4_light-circle.avif"
-                loading="eager"
-                sizes="(max-width: 2200px) 100vw, 2200px"
-                srcSet="images/56c71daa9866842d3ee5787a28d055a4_light-circle-p-500.png 500w, images/56c71daa9866842d3ee5787a28d055a4_light-circle-p-800.png 800w, images/56c71daa9866842d3ee5787a28d055a4_light-circle.avif 2200w"
-                alt="Light Blue Gradient"
-                className="secondary-circle"
-              />
-              <div className="overlay-light"></div>
-            </div>
-            <div className="padding-global">
-              <div className="container-large">
-                <div className="home-hero">
-                  <div className="wrapper-home-hero">
-                    <div className="stack-hero-home">
-                      <div className="stack-trusted-by">
-                        <div className="stack-images-trusted-logos">
-                          <img
-                            src="images/female_ceo_portrait_close_up_2_2x.webp"
-                            loading="eager"
-                            alt="Client Photo Four"
-                            className="single-testimonial-image"
-                          />
-                          <img
-                            src="images/tech_entrepreneur_portrait_2_2x.webp"
-                            loading="eager"
-                            alt="Client Photo Three"
-                            className="single-testimonial-image"
-                          />
-                          <img
-                            src="images/hyper_realistic_linkedin_headshot_1_2_2x.webp"
-                            loading="eager"
-                            alt="Client Photo Two"
-                            className="single-testimonial-image"
-                          />
-                          <img
-                            src="images/hyper_realistic_business_portrait_2_2x.webp"
-                            loading="eager"
-                            alt="Client Photo"
-                            className="single-testimonial-image"
-                          />
-                        </div>
-                        <div className="body-l text-color-primary-light custom-mobile">
-                          Trusted by 300+ companies
-                        </div>
-                      </div>
-                      <div className="text-block-hero">
-                        <h1 className="h1 text-color-primary-light">
-                          Verifiable computation for a new era of trust
-                        </h1>
-                        <div className="body-xl text-color-primary-light">
-                          Prove the computation, not just the result.
-                        </div>
-                      </div>
-                    </div>
-                    <div className="button-stack">
-                      {session ? (
-                        <a
-                          data-wf--button-primary--variant="base"
-                          href="/dashboard"
-                          className="button w-inline-block"
-                        >
-                          <div className="button-wrap-out">
-                            <div className="button-wrap-in">
-                              <div className="body-m">Go to Dashboard</div>
-                              <div className="body-m position-absolute">
-                                Go to Dashboard
-                              </div>
-                            </div>
-                          </div>
-                        </a>
-                      ) : (
-                        <a
-                          data-wf--button-primary--variant="base"
-                          href="/signup"
-                          className="button w-inline-block"
-                        >
-                          <div className="button-wrap-out">
-                            <div className="button-wrap-in">
-                              <div className="body-m">Login / Sign Up</div>
-                              <div className="body-m position-absolute">
-                                Login / Sign Up
-                              </div>
-                            </div>
-                          </div>
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="section-logos padding-top">
-            <div className="logos-container">
-              <img
-                loading="lazy"
-                src="images/b12045d563ec1444835cf2e98dcd7e65_client-logo-1.webp"
-                alt="Logoipsum Logo - Cyber security client - Securio"
-                className="client-logo"
-              />
-              <img
-                loading="lazy"
-                src="images/8f276dec104bff8064233aae1c5434e5_client-logo-2.webp"
-                alt="Department of Fictional Logos - Cyber security client - Securio"
-                className="client-logo"
-              />
-              <img
-                loading="lazy"
-                src="images/624f702efee7432c36428b0c753ac1d1_client-logo-3.webp"
-                alt="Logoipsum Academy - Cyber security client - Securio"
-                className="client-logo"
-              />
-              <img
-                loading="lazy"
-                src="images/31adaa65bef8b162795fecd4ef7fb698_client-logo-4.webp"
-                alt="Logoipsum Tech - Cyber security client - Securio"
-                className="client-logo"
-              />
-              <img
-                loading="lazy"
-                src="images/23b2099d3d1cfce8c6aa1eb19563fc7f_client-logo-5.webp"
-                alt="Logoipsum est 2019 - Cyber security client - Securio"
-                className="client-logo"
-              />
-              <img
-                loading="lazy"
-                src="images/ba4340ee677c66f1d10c3a6cc9582cc1_client-logo-6.webp"
-                alt="Logoipsum - Cyber security client - Securio"
-                className="client-logo"
-              />
-            </div>
-            <div className="logos-container">
-              <img
-                loading="lazy"
-                src="images/b12045d563ec1444835cf2e98dcd7e65_client-logo-1.webp"
-                alt="Logoipsum Logo - Cyber security client - Securio"
-                className="client-logo"
-              />
-              <img
-                loading="lazy"
-                src="images/8f276dec104bff8064233aae1c5434e5_client-logo-2.webp"
-                alt="Department of Fictional Logos - Cyber security client - Securio"
-                className="client-logo"
-              />
-              <img
-                loading="lazy"
-                src="images/624f702efee7432c36428b0c753ac1d1_client-logo-3.webp"
-                alt="Logoipsum Academy - Cyber security client - Securio"
-                className="client-logo"
-              />
-              <img
-                loading="lazy"
-                src="images/31adaa65bef8b162795fecd4ef7fb698_client-logo-4.webp"
-                alt="Logoipsum Tech - Cyber security client - Securio"
-                className="client-logo"
-              />
-              <img
-                loading="lazy"
-                src="images/23b2099d3d1cfce8c6aa1eb19563fc7f_client-logo-5.webp"
-                alt="Logoipsum est 2019 - Cyber security client - Securio"
-                className="client-logo"
-              />
-              <img
-                loading="lazy"
-                src="images/ba4340ee677c66f1d10c3a6cc9582cc1_client-logo-6.webp"
-                alt="Logoipsum - Cyber security client - Securio"
-                className="client-logo"
-              />
-            </div>
-            <div className="logos-container">
-              <img
-                loading="lazy"
-                src="images/b12045d563ec1444835cf2e98dcd7e65_client-logo-1.webp"
-                alt="Logoipsum Logo - Cyber security client - Securio"
-                className="client-logo"
-              />
-              <img
-                loading="lazy"
-                src="images/8f276dec104bff8064233aae1c5434e5_client-logo-2.webp"
-                alt="Department of Fictional Logos - Cyber security client - Securio"
-                className="client-logo"
-              />
-              <img
-                loading="lazy"
-                src="images/624f702efee7432c36428b0c753ac1d1_client-logo-3.webp"
-                alt="Logoipsum Academy - Cyber security client - Securio"
-                className="client-logo"
-              />
-              <img
-                loading="lazy"
-                src="images/31adaa65bef8b162795fecd4ef7fb698_client-logo-4.webp"
-                alt="Logoipsum Tech - Cyber security client - Securio"
-                className="client-logo"
-              />
-              <img
-                loading="lazy"
-                src="images/23b2099d3d1cfce8c6aa1eb19563fc7f_client-logo-5.webp"
-                alt="Logoipsum est 2019 - Cyber security client - Securio"
-                className="client-logo"
-              />
-              <img
-                loading="lazy"
-                src="images/ba4340ee677c66f1d10c3a6cc9582cc1_client-logo-6.webp"
-                alt="Logoipsum - Cyber security client - Securio"
-                className="client-logo"
-              />
-            </div>
-          </div>
-          <div className="section-benefits-home">
-            <div className="padding-global">
-              <div className="container-large">
-                <div className="wrapper-services">
-                  <div className="tagline-heading max-width-50">
-                    <div className="tagline">SECURITY SERVICES</div>
-                    <h2 className="h2">
-                      Every action visible. 
-                      <br />
-                      Every decision defensible.
-                    </h2>
-                  </div>
-                  <div className="wrapper-3-boxes-grid">
-                    <div className="single-service">
-                      <a
-                        href="/proactive-security"
-                        className="service-img-wrapper w-inline-block"
-                      >
-                        <img
-                          src="images/52cfc651dd1b87b52e3e052d47099475_proactive-security.webp"
-                          loading="lazy"
-                          data-wf-target='[[["69d7ff8e969e813423a2598c","85dcf1b7-23d1-16b4-f388-42c6877e8669"],[]]]'
-                          sizes="(max-width: 1210px) 100vw, 1210px"
-                          alt="Verifiable Compute - Dashboard Panel"
-                          srcSet="images/52cfc651dd1b87b52e3e052d47099475_proactive-security-p-500.webp 500w, images/52cfc651dd1b87b52e3e052d47099475_proactive-security-p-800.webp 800w, images/52cfc651dd1b87b52e3e052d47099475_proactive-security.webp 1210w"
-                          className="service-img"
-                        />
-                      </a>
-                      <div className="heading-text">
-                        <h3 className="h4">Verifiable Compute</h3>
-                        <div className="body-l text-color-secondary">
-                          Optimistic execution with a Merkle-committed step trace.
-                        </div>
-                      </div>
-                    </div>
-                    <div className="single-service">
-                      <a
-                        href="/penetration-testing"
-                        className="service-img-wrapper _2nd w-inline-block"
-                      >
-                        <img
-                          src="images/9c7676ccf2a9c500523b4a8abc45bde2_alert.webp"
-                          loading="lazy"
-                          data-wf-target='[[["69d7ff8e969e813423a2598c","85dcf1b7-23d1-16b4-f388-42c6877e8671"],[]]]'
-                          sizes="(max-width: 1210px) 100vw, 1210px"
-                          alt="Bisection Protocol - Security Audit Panel"
-                          srcSet="images/9c7676ccf2a9c500523b4a8abc45bde2_alert-p-500.webp 500w, images/9c7676ccf2a9c500523b4a8abc45bde2_alert-p-800.webp 800w, images/9c7676ccf2a9c500523b4a8abc45bde2_alert-p-1080.webp 1080w, images/9c7676ccf2a9c500523b4a8abc45bde2_alert.webp 1210w"
-                          className="service-img"
-                        />
-                      </a>
-                      <div className="heading-text">
-                        <h3 className="h4">Bisection Protocol</h3>
-                        <div className="body-l text-color-secondary">
-                          Interactive bisection game narrowing to one disputed step.
-                        </div>
-                      </div>
-                    </div>
-                    <div className="single-service">
-                      <a
-                        href="/endpoint-security"
-                        className="service-img-wrapper _3rd w-inline-block"
-                      >
-                        <img
-                          src="images/endpoint-security.webp"
-                          loading="lazy"
-                          data-wf-target='[[["69d7ff8e969e813423a2598c","85dcf1b7-23d1-16b4-f388-42c6877e8679"],[]]]'
-                          sizes="100vw"
-                          alt="Tamper-Evident Dashboard visualizing steps to protect business"
-                          srcSet="images/endpoint-security-p-500.webp 500w, images/endpoint-security.webp 576w"
-                          className="service-img"
-                        />
-                      </a>
-                      <div className="heading-text">
-                        <h3 className="h4">Tamper-Evident</h3>
-                        <div className="body-l text-color-secondary">
-                          Anyone can replay locally and challenge on-chain.
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="section-testimonial">
-            <div className="padding-global">
-              <div className="container-medium">
-                <div className="wrapper-testimonials">
-                  <div className="testimonial-quote">
-                    <div className="quote-icon"></div>
-                    <div className="h3 text-align-center scroll-highlight">
-                      &quot;They brought clarity to complex problems, breaking
-                      down barriers and delivering innovative solutions.  I was
-                      truly impressed by how quickly their strategies tuned
-                      into real, tangible outcomes.&quot;
-                    </div>
-                  </div>
-                  <div className="quote-name">
-                    <div className="body-xl text-align-center">John Lee</div>
-                    <div className="body-l text-align-center text-color-secondary">
-                      CEO, Tech Innovations
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="section-our-process">
-            <div className="padding-global">
-              <div className="container-large">
-                <div className="image-and-text-wrapper">
-                  <div className="content-container-wrapper">
-                    <div className="tagline-heading">
-                      <h2 className="h2">
-                        Verifiable computation lifecycle
-                      </h2>
-                    </div>
-                    <div className="stack-items-process">
-                      <div className="single-process is-first">
-                        <div className="process-content">
-                          <div className="process-headline">
-                            <div className="h5">Request Computation</div>
-                            <div className="h5">1</div>
-                          </div>
-                          <div className="answer-process is-first">
-                            <div className="answer-content">
-                              <div className="body-l text-color-secondary">
-                                We assess your systems, workflows, risks, and
-                                business goals to find weak points, define
-                                priorities, and create a clear security baseline
-                                before any work begins.
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="line-process is-first"></div>
-                      </div>
-                      <div className="single-process is-second">
-                        <div className="process-content">
-                          <div className="process-headline">
-                            <div className="h5">Off-Chain Execution</div>
-                            <div className="h5">2</div>
-                          </div>
-                          <div className="answer-process is-second">
-                            <div className="answer-content">
-                              <div className="body-l text-color-secondary">
-                                We map the right controls, workflows, response
-                                paths, and security structure around your
-                                environment so every decision supports
-                                visibility, resilience, and scale.
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="line-process is-second"></div>
-                      </div>
-                      <div className="single-process is-third">
-                        <div className="process-content">
-                          <div className="process-headline">
-                            <div className="h5">Verification & Dispute</div>
-                            <div className="h5">3</div>
-                          </div>
-                          <div className="answer-process is-third">
-                            <div className="answer-content">
-                              <div className="body-l text-color-secondary">
-                                We deploy, test, and refine the solution across
-                                your systems, making sure each control works in
-                                practice and supports response, monitoring, and
-                                long-term protection.
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="line-process is-third"></div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="img-process">
-                    <img
-                      src="images/dashboard.webp"
-                      loading="lazy"
-                      sizes="100vw"
-                      srcSet="images/dashboard-p-500.webp 500w, images/dashboard-p-800.webp 800w, images/dashboard-p-1080.webp 1080w, images/dashboard.webp 1440w"
-                      alt="Cyber Security App Dashboard"
-                      className="img-dashboard"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="section-solutions-home">
-            <div className="padding-global">
-              <div className="container-large">
-                <div className="wrapper-services">
-                  <div className="tagline-heading max-width-50">
-                    <div className="tagline">Verity guarantees</div>
-                    <h2 className="h2">Security properties</h2>
-                  </div>
-                  <div className="grid-solutions">
-                    <div className="single-solution">
-                      <img
-                        src="images/ec429784abbf71dfe4813577b0316808_lucide-20icon-20bug-201.webp"
-                        loading="lazy"
-                        alt="Soundness"
-                        className="icon-large"
-                      />
-                      <div className="heading-text">
-                        <h3 className="h4">Soundness</h3>
-                        <div className="body-l text-color-secondary">
-                          We monitor threat signals, analyze patterns, and help
-                          your team understand which risks need attention before
-                          they become incidents.
-                        </div>
-                      </div>
-                    </div>
-                    <div className="single-solution">
-                      <img
-                        src="images/320b2cf341190edc931112762cb6a0cb_users-icon.webp"
-                        loading="lazy"
-                        alt="Input Integrity"
-                        className="icon-large"
-                      />
-                      <div className="heading-text">
-                        <h3 className="h4">Input Integrity</h3>
-                        <div className="body-l text-color-secondary">
-                          We help protect user access, reduce account misuse,
-                          and make sure the right people can reach the right
-                          systems safely.
-                        </div>
-                      </div>
-                    </div>
-                    <div className="single-solution">
-                      <img
-                        src="images/7b21acd87a2fd57e6bf2eb4563241bf5_globe-20lock-20icon-201.webp"
-                        loading="lazy"
-                        alt="Program Integrity"
-                        className="icon-large"
-                      />
-                      <div className="heading-text">
-                        <h3 className="h4">Program Integrity</h3>
-                        <div className="body-l text-color-secondary">
-                          We strengthen your network controls, reduce exposure,
-                          and help block suspicious activity before it reaches
-                          critical systems.
-                        </div>
-                      </div>
-                    </div>
-                    <div className="single-solution">
-                      <img
-                        src="images/2ba2ac2097621c98661011be25c1c3d0_shield-20alert-20icon-202.webp"
-                        loading="lazy"
-                        alt="Liveness"
-                        className="icon-large"
-                      />
-                      <div className="heading-text">
-                        <h3 className="h4">Liveness</h3>
-                        <div className="body-l text-color-secondary">
-                          We help your team contain threats, investigate
-                          activity, and restore control with a clear response
-                          process when incidents happen.
-                        </div>
-                      </div>
-                    </div>
-                    <div className="single-solution">
-                      <img
-                        src="images/d57d53c2b733b41028b16380c0c557f4_folder-20lock-20icon-201.webp"
-                        loading="lazy"
-                        alt="Tamper Evidence"
-                        className="icon-large"
-                      />
-                      <div className="heading-text">
-                        <h3 className="h4">Tamper Evidence</h3>
-                        <div className="body-l text-color-secondary">
-                          We protect sensitive business data across systems,
-                          devices, and workflows with controls built around real
-                          security risks.
-                        </div>
-                      </div>
-                    </div>
-                    <div className="single-solution">
-                      <img
-                        src="images/4c59ce1d2d4a881a8aa99163a8cd2de2_pie-20chart-20icon-201.webp"
-                        loading="lazy"
-                        alt="Dispute Resolution"
-                        className="icon-large"
-                      />
-                      <div className="heading-text">
-                        <h3 className="h4">Dispute Resolution</h3>
-                        <div className="body-l text-color-secondary">
-                          We turn security data into clear insights, helping
-                          your team detect issues faster and make better
-                          security decisions.
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="section-case-studies">
-            <div className="padding-global">
-              <div className="container-large">
-                <div className="wrapper-services">
-                  <div className="tagline-heading max-width-50">
-                    <div className="tagline">ADVERSARIAL SCENARIOS</div>
-                    <h2 className="h2">Tested against malicious actors</h2>
-                  </div>
-                  <div className="collection-list-wrapper w-dyn-list">
-                    <div role="list" className="collection-list w-dyn-items">
-                      <div
-                        role="listitem"
-                        className="single-case-study w-dyn-item"
-                      >
-                        <div className="arrow-case-study">
-                          <img
-                            src="images/a084a55eae24d51e99625b0713f2ff3a_arrow-white.webp"
-                            loading="lazy"
-                            alt="Arrow"
-                            className="arrow-link absolute"
-                          />
-                          <img
-                            src="images/a084a55eae24d51e99625b0713f2ff3a_arrow-white.webp"
-                            loading="lazy"
-                            alt="Arrow"
-                            className="arrow-link"
-                          />
-                        </div>
-                        <img
-                          src="images/img_devops.webp"
-                          loading="lazy"
-                          alt="DevOps team reviewing pipeline security in a modern workspace"
-                          sizes="100vw"
-                          srcSet="images/img_devops-p-500.webp 500w, images/img_devops-p-800.webp 800w, images/img_devops.webp 832w"
-                          className="image-case-study"
-                        />
-                        <a
-                          href="/case-study/modernizing-devops-fintech-security"
-                          className="link-case-study w-inline-block"
-                        >
-                          <div className="case-study-content">
-                            <div className="body-l text-color-primary-light">
-                              CASE STUDY
-                            </div>
-                            <h3 className="h4 text-color-primary-light">
-                              Forged Trace Detection
-                            </h3>
-                          </div>
-                          <div className="blur-overlay"></div>
-                        </a>
-                      </div>
-                      <div
-                        role="listitem"
-                        className="single-case-study w-dyn-item"
-                      >
-                        <div className="arrow-case-study">
-                          <img
-                            src="images/a084a55eae24d51e99625b0713f2ff3a_arrow-white.webp"
-                            loading="lazy"
-                            alt="Arrow"
-                            className="arrow-link absolute"
-                          />
-                          <img
-                            src="images/a084a55eae24d51e99625b0713f2ff3a_arrow-white.webp"
-                            loading="lazy"
-                            alt="Arrow"
-                            className="arrow-link"
-                          />
-                        </div>
-                        <img
-                          src="images/image_healthcare_1x.webp"
-                          loading="lazy"
-                          alt="Healthcare security specialist reviewing system data on a workstation"
-                          sizes="100vw"
-                          srcSet="images/image_healthcare_1x-p-500.webp 500w, images/image_healthcare_1x-p-800.webp 800w, images/image_healthcare_1x.webp 832w"
-                          className="image-case-study"
-                        />
-                        <a
-                          href="/case-study/modernizing-healthcare-security"
-                          className="link-case-study w-inline-block"
-                        >
-                          <div className="case-study-content">
-                            <div className="body-l text-color-primary-light">
-                              CASE STUDY
-                            </div>
-                            <h3 className="h4 text-color-primary-light">
-                              Invalid Result Slashing
-                            </h3>
-                          </div>
-                          <div className="blur-overlay"></div>
-                        </a>
-                      </div>
-                      <div
-                        role="listitem"
-                        className="single-case-study w-dyn-item"
-                      >
-                        <div className="arrow-case-study">
-                          <img
-                            src="images/a084a55eae24d51e99625b0713f2ff3a_arrow-white.webp"
-                            loading="lazy"
-                            alt="Arrow"
-                            className="arrow-link absolute"
-                          />
-                          <img
-                            src="images/a084a55eae24d51e99625b0713f2ff3a_arrow-white.webp"
-                            loading="lazy"
-                            alt="Arrow"
-                            className="arrow-link"
-                          />
-                        </div>
-                        <img
-                          src="images/image-case-study-2.webp"
-                          loading="lazy"
-                          alt="Cloud security team discussing data protection for a SaaS platform"
-                          sizes="100vw"
-                          srcSet="images/image-case-study-2-p-500.webp 500w, images/image-case-study-2-p-800.webp 800w, images/image-case-study-2.webp 832w"
-                          className="image-case-study"
-                        />
-                        <a
-                          href="/case-study/securing-enterprise-data-at-scale"
-                          className="link-case-study w-inline-block"
-                        >
-                          <div className="case-study-content">
-                            <div className="body-l text-color-primary-light">
-                              CASE STUDY
-                            </div>
-                            <h3 className="h4 text-color-primary-light">
-                              Wrong Input Data Rejection
-                            </h3>
-                          </div>
-                          <div className="blur-overlay"></div>
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="section-faq">
-            <div className="padding-global">
-              <div className="container-large">
-                <div className="faq-container">
-                  <div className="w-layout-grid faq-2-column-grid">
-                    <div className="faq-column-left">
-                      <div className="tagline-heading">
-                        <div className="tagline">Questions &amp; answers</div>
-                        <div className="heading-width-faq">
-                          <h3 className="h2">Frequently  Asked Questions</h3>
-                        </div>
-                      </div>
-                      <a href="/contact" className="faq-cta w-inline-block">
-                        <div className="stack-copy-cta">
-                          <div className="h5">
-                            Can’t find an answer to your question?
-                          </div>
-                          <div className="body-l text-color-secondary-light">
-                            Click to get in touch
-                          </div>
-                        </div>
-                        <div className="arrow-cta-faq">
-                          <img
-                            src="images/a7d4528cda83365cd510f7bfda6e9ba6_arrow-link.webp"
-                            loading="lazy"
-                            alt="Arrow White Up"
-                            className="arrow-link absolute"
-                          />
-                          <img
-                            src="images/a7d4528cda83365cd510f7bfda6e9ba6_arrow-link.webp"
-                            loading="lazy"
-                            alt="Arrow White Up"
-                            className="arrow-link"
-                          />
-                        </div>
-                      </a>
-                    </div>
-                    <div className="faq-column-right">
-                      <div className="faq-list">
-                        <div className="faq-item">
-                          <div className="faq-question">
-                            <h4 className="h6 text-color-on-primary">
-                              What types of cyber threats do you protect
-                              against?
-                            </h4>
-                            <div className="faq-icon-wrapper">
-                              <img
-                                src="images/725368c07caa02d359a424f4d695420d_faq-icon.webp"
-                                loading="lazy"
-                                alt="FAQ Icon"
-                                className="faq-icon"
-                              />
-                            </div>
-                          </div>
-                          <div className="faq-answer">
-                            <div className="faq-content">
-                              <div className="body-m text-color-secondary">
-                                We help protect against phishing, malware,
-                                ransomware, account misuse, data exposure,
-                                network attacks, and suspicious activity across
-                                your systems.
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="faq-item">
-                          <div className="faq-question">
-                            <h4 className="h6 text-color-on-primary">
-                              How quickly can you detect and respond to an
-                              attack?
-                            </h4>
-                            <div className="faq-icon-wrapper">
-                              <img
-                                src="images/725368c07caa02d359a424f4d695420d_faq-icon.webp"
-                                loading="lazy"
-                                alt="FAQ Icon"
-                                className="faq-icon"
-                              />
-                            </div>
-                          </div>
-                          <div className="faq-answer">
-                            <div className="faq-content">
-                              <div className="body-m text-color-secondary">
-                                Response time depends on your environment and
-                                service scope, but our process is built to
-                                detect threats early, prioritize risk, and act
-                                quickly.
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="faq-item">
-                          <div className="faq-question">
-                            <h4 className="h6 text-color-on-primary">
-                              Why not just run it all on-chain?
-                            </h4>
-                            <div className="faq-icon-wrapper">
-                              <img
-                                src="images/725368c07caa02d359a424f4d695420d_faq-icon.webp"
-                                loading="lazy"
-                                alt="FAQ Icon"
-                                className="faq-icon"
-                              />
-                            </div>
-                          </div>
-                          <div className="faq-answer">
-                            <div className="faq-content">
-                              <div className="body-m text-color-secondary">
-                                Yes. We can provide continuous monitoring and
-                                support to help your team identify issues,
-                                review alerts, and respond when activity needs
-                                attention.
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="faq-item">
-                          <div className="faq-question">
-                            <h4 className="h6 text-color-on-primary">
-                              Does this require ZK-Proofs?
-                            </h4>
-                            <div className="faq-icon-wrapper">
-                              <img
-                                src="images/725368c07caa02d359a424f4d695420d_faq-icon.webp"
-                                loading="lazy"
-                                alt="FAQ Icon"
-                                className="faq-icon"
-                              />
-                            </div>
-                          </div>
-                          <div className="faq-answer">
-                            <div className="faq-content">
-                              <div className="body-m text-color-secondary">
-                                Yes. Our services are built to support changing
-                                teams, systems, locations, and risk levels as
-                                your business grows and your security needs
-                                expand.
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="faq-item">
-                          <div className="faq-question">
-                            <h4 className="h6 text-color-on-primary">
-                              How do you ensure compliance with industry
-                              standards?
-                            </h4>
-                            <div className="faq-icon-wrapper">
-                              <img
-                                src="images/725368c07caa02d359a424f4d695420d_faq-icon.webp"
-                                loading="lazy"
-                                alt="FAQ Icon"
-                                className="faq-icon"
-                              />
-                            </div>
-                          </div>
-                          <div className="faq-answer">
-                            <div className="faq-content">
-                              <div className="body-m text-color-secondary">
-                                We align security controls, reporting, and
-                                processes with relevant standards, helping your
-                                team reduce gaps and stay audit-ready.
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="faq-item">
-                          <div className="faq-question">
-                            <h4 className="h6 text-color-on-primary">
-                              How do you onboard and integrate with our existing
-                              infrastructure?
-                            </h4>
-                            <div className="faq-icon-wrapper">
-                              <img
-                                src="images/725368c07caa02d359a424f4d695420d_faq-icon.webp"
-                                loading="lazy"
-                                alt="FAQ Icon"
-                                className="faq-icon"
-                              />
-                            </div>
-                          </div>
-                          <div className="faq-answer">
-                            <div className="faq-content">
-                              <div className="body-m text-color-secondary">
-                                We review your current tools, systems, and
-                                workflows first, then integrate security
-                                controls without disrupting your daily
-                                operations.
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="faq-item">
-                          <div className="faq-question">
-                            <h4 className="h6 text-color-on-primary">
-                              What level of visibility and reporting will we
-                              have?
-                            </h4>
-                            <div className="faq-icon-wrapper">
-                              <img
-                                src="images/725368c07caa02d359a424f4d695420d_faq-icon.webp"
-                                loading="lazy"
-                                alt="FAQ Icon"
-                                className="faq-icon"
-                              />
-                            </div>
-                          </div>
-                          <div className="faq-answer">
-                            <div className="faq-content">
-                              <div className="body-m text-color-secondary">
-                                You get clear reporting on risks, alerts,
-                                activity, and progress, so your team can
-                                understand what is happening and what needs
-                                attention.
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="section-footer">
-            <div className="padding-global">
-              <div className="container-large">
-                <div className="footer-container">
-                  <div className="footer-grid">
-                    <div className="footer-left"></div>
-                    <div className="footer-right">
-                      <div className="footer-cta-section">
-                        <div className="wrapper-heading-footer">
-                          <h2 className="h2 text-color-primary-light">
-                            Start verifying  computations
-                          </h2>
-                        </div>
-                        <div className="button-stack">
-                          {session ? (
-                            <a
-                              data-wf--button-primary--variant="white"
-                              href="/dashboard"
-                              className="button w-variant-7796a781-a911-051b-9ce3-835095f27174 w-inline-block"
-                            >
-                              <div className="button-wrap-out">
-                                <div className="button-wrap-in">
-                                  <div className="body-m">Go to Dashboard</div>
-                                  <div className="body-m position-absolute">
-                                    Go to Dashboard
-                                  </div>
-                                </div>
-                              </div>
-                            </a>
-                          ) : (
-                            <a
-                              data-wf--button-primary--variant="white"
-                              href="/signup"
-                              className="button w-variant-7796a781-a911-051b-9ce3-835095f27174 w-inline-block"
-                            >
-                              <div className="button-wrap-out">
-                                <div className="button-wrap-in">
-                                  <div className="body-m">Login / Sign Up</div>
-                                  <div className="body-m position-absolute">
-                                    Login / Sign Up
-                                  </div>
-                                </div>
-                              </div>
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="footer-grid">
-                    <div className="footer-left">
-                      <div className="stack-footer-bottom">
-                        <a
-                          href="/"
-                          aria-current="page"
-                          className="w-inline-block w--current"
-                        >
-                          <img
-                            loading="lazy"
-                            src="images/6e2ce84846bb3c8d4b3feedcb27bdc19_brand-20logo.webp"
-                            alt="Verity Logo Monochrome White"
-                            className="footer-logo"
-                          />
-                        </a>
-                        <div className="footer-description">
-                          <div className="body-l text-color-primary-light">
-                            Prove the computation, not just the result.
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="footer-right">
-                      <div className="footer-links-container">
-                        <div className="footer-links-list">
-                          <a href="/proactive-security" className="footer-link">
-                            Verifiable Compute
-                          </a>
-                          <a
-                            href="/penetration-testing"
-                            className="footer-link"
-                          >
-                            Bisection Protocol
-                          </a>
-                          <a href="/endpoint-security" className="footer-link">
-                            Tamper-Evident
-                          </a>
-                        </div>
-                        <div className="footer-links-list">
-                          <a href="/case-study" className="footer-link">
-                            Case Studies
-                          </a>
-                          <a href="/about" className="footer-link">
-                            About
-                          </a>
-                          <a href="/contact" className="footer-link">
-                            Contact
-                          </a>
-                          <a href="/certifications" className="footer-link">
-                            Certifications
-                          </a>
-                          <a href="/careers" className="footer-link">
-                            Careers
-                          </a>
-                          <a href="/404" className="footer-link">
-                            404 Page
-                          </a>
-                          <a href="/thank-you" className="footer-link">
-                            Thank you
-                          </a>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="footer-grid">
-                    <div className="bottom-line-footer">
-                      <div className="stack-links-footer">
-                        <a href="/style-guide" className="footer-link medium">
-                          Licenses
-                        </a>
-                        <a href="/style-guide" className="footer-link medium">
-                          Style guide
-                        </a>
-                        <a href="/style-guide" className="footer-link medium">
-                          Changelog
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="footer-bottom">
-                    <div className="body-s text-color-secondary-light">
-                      Built for Bit N Build
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="padding-section-small"></div>
-          </div>
+
+function Nav() {
+  const { user, loading, displayName, signOut } = useAuth();
+  return (
+    <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 backdrop-blur">
+      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4">
+        <Link href="/" className="flex items-center gap-2 font-semibold text-slate-900">
+          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-blue-600 text-white">
+            <ShieldCheck className="h-4 w-4" aria-hidden />
+          </span>
+          Verity
+        </Link>
+        <nav className="hidden items-center gap-6 text-sm text-slate-600 md:flex">
+          <a href="#how" className="hover:text-slate-900">
+            How it works
+          </a>
+          <Link href="/rulesets" className="hover:text-slate-900">
+            Rule sets
+          </Link>
+          <Link href="/activity" className="hover:text-slate-900">
+            Audit trail
+          </Link>
+        </nav>
+        <div className="flex items-center gap-2">
+          {loading ? null : user ? (
+            <>
+              <span className="hidden max-w-[12rem] truncate text-xs text-slate-500 sm:inline">{displayName}</span>
+              <button
+                onClick={signOut}
+                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                aria-label="Sign out"
+              >
+                <LogOut className="h-4 w-4" aria-hidden />
+              </button>
+              <Link
+                href="/dashboard"
+                className="rounded-lg bg-slate-900 px-3.5 py-1.5 text-sm font-semibold text-white hover:bg-slate-800"
+              >
+                Open app
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link href="/login" className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                Sign in
+              </Link>
+              <Link
+                href="/signup"
+                className="rounded-lg bg-slate-900 px-3.5 py-1.5 text-sm font-semibold text-white hover:bg-slate-800"
+              >
+                Get started
+              </Link>
+            </>
+          )}
         </div>
       </div>
-    </>
+    </header>
+  );
+}
+
+function LiveStats() {
+  const { data, error, loading } = useApi<Stats>("/stats", 15000, [{ table: "requests" }, { table: "disputes" }, { table: "programs" }]);
+  const tiles = [
+    { label: "Computation requests", value: fmtCount(data?.total_requests) },
+    {
+      label: "Verified",
+      value: data ? (data.verified_pct === null ? "—" : `${Math.round(data.verified_pct)}%`) : "—",
+      sub: data ? `${fmtCount(data.verified)} of ${fmtCount(data.verified + data.rejected)} settled` : undefined,
+    },
+    {
+      label: "Frauds caught",
+      value: fmtCount(data?.disputes_caught),
+      sub: data ? `${fmtCount(data.rejected)} requests rejected` : undefined,
+    },
+    { label: "Verifier attestations", value: fmtCount(data?.attestations) },
+  ];
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <span className="inline-flex items-center gap-1.5 font-semibold uppercase tracking-wider text-slate-500">
+          {error && !data ? (
+            <span className="h-2 w-2 rounded-full bg-slate-300" />
+          ) : (
+            <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+          )}
+          Live on Solana {env.cluster}
+        </span>
+        {loading && !data && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" aria-label="Loading stats" />}
+        {error && !data && <span className="text-slate-400">Stats unavailable right now</span>}
+      </div>
+      <dl className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {tiles.map((t) => (
+          <div key={t.label}>
+            <dt className="text-xs text-slate-500">{t.label}</dt>
+            <dd className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{t.value}</dd>
+            {t.sub && <dd className="text-[11px] text-slate-400">{t.sub}</dd>}
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+function RuleSets() {
+  const { data, error, loading } = useApi<Program[]>("/programs", undefined, [{ table: "programs" }]);
+  const items = (data ?? []).slice(0, 6);
+  return (
+    <section className="mx-auto max-w-6xl px-4 py-16">
+      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900">Rule sets ready to run</h2>
+          <p className="mt-1 max-w-2xl text-sm text-slate-600">
+            Deterministic WebAssembly programs with integer-only maths, so every machine and browser computes bit-identical output.
+          </p>
+        </div>
+        <Link href="/rulesets" className="inline-flex items-center gap-1 text-sm font-semibold text-blue-600 hover:underline">
+          All rule sets <ArrowRight className="h-4 w-4" aria-hidden />
+        </Link>
+      </div>
+      {loading && !data ? (
+        <p className="flex items-center gap-2 text-sm text-slate-500">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading rule sets…
+        </p>
+      ) : error && !data ? (
+        <p className="text-sm text-slate-500">Rule sets are unavailable right now.</p>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-slate-500">No rule sets registered yet.</p>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {items.map((p) => (
+            <Link
+              key={p.program_hash}
+              href={`/create-job?program=${encodeURIComponent(p.program_hash)}`}
+              className="group flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-300 hover:shadow"
+            >
+              <div className="flex items-center gap-2">
+                <Boxes className="h-4 w-4 text-blue-600" aria-hidden />
+                <span className="font-semibold text-slate-900">{p.name}</span>
+              </div>
+              {p.description && <p className="mt-2 line-clamp-3 text-sm text-slate-600">{p.description}</p>}
+              <div className="mt-auto flex items-center justify-between pt-4 text-xs">
+                <code className="font-mono text-slate-400">sha256 {shortKey(p.program_hash, 6)}</code>
+                <span className="font-semibold text-blue-600 group-hover:underline">Run it →</span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function RecentActivity() {
+  const { data, error } = useApi<AuditLogRow[]>("/activity?limit=8", 15000, [{ table: "audit_log" }]);
+  if (error && !data) return null;
+  const rows = data ?? [];
+  return (
+    <section className="border-y border-slate-200 bg-white">
+      <div className="mx-auto max-w-6xl px-4 py-16">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">Happening now</h2>
+            <p className="mt-1 text-sm text-slate-600">The latest entries in the hash-chained audit log, each linked to its Solana transaction.</p>
+          </div>
+          <Link href="/activity" className="inline-flex items-center gap-1 text-sm font-semibold text-blue-600 hover:underline">
+            Full audit trail <ArrowRight className="h-4 w-4" aria-hidden />
+          </Link>
+        </div>
+        {rows.length === 0 ? (
+          <p className="text-sm text-slate-500">{data ? "No activity yet." : "Loading…"}</p>
+        ) : (
+          <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200">
+            {rows.map((r) => (
+              <li key={r.seq} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3 text-sm">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="font-mono text-xs text-slate-400">#{r.seq}</span>
+                  <span className="font-medium text-slate-900">{r.event_type}</span>
+                  {r.request_pda && (
+                    <Link href={`/verify/${r.request_pda}`} className="font-mono text-xs text-blue-600 hover:underline">
+                      {shortKey(r.request_pda, 5)}
+                    </Link>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 text-xs text-slate-500">
+                  <time>{new Date(r.created_at).toLocaleString()}</time>
+                  {r.explorer && (
+                    <a href={r.explorer} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-blue-600 hover:underline">
+                      tx <ExternalLink className="h-3 w-3" aria-hidden />
+                    </a>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
+export default function LandingPage() {
+  const programUrl = explorerAddress(env.programId);
+  return (
+    <div className="min-h-screen w-full bg-slate-50 text-slate-900">
+      <Nav />
+
+      <main>
+        <section className="relative overflow-hidden">
+          <div
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(60rem_30rem_at_50%_-10%,rgba(37,99,235,0.12),transparent)]"
+            aria-hidden
+          />
+          <div className="relative mx-auto max-w-6xl px-4 pb-12 pt-16 sm:pt-24">
+            <p className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+              <ShieldCheck className="h-3.5 w-3.5" aria-hidden /> Verifiable computation on Solana
+            </p>
+            <h1 className="mt-5 max-w-3xl text-4xl font-bold leading-tight tracking-tight text-slate-900 sm:text-5xl">
+              Prove the computation, not just the result.
+            </h1>
+            <p className="mt-5 max-w-2xl text-lg text-slate-600">
+              When you outsource a computation, you can&apos;t normally tell whether the provider ran the agreed program on the agreed
+              input. Verity commits every program, input and output to Solana, has independent verifiers re-execute the work, and
+              slashes anyone caught cheating.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                href="/create-job"
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-500"
+              >
+                Submit a computation <ArrowRight className="h-4 w-4" aria-hidden />
+              </Link>
+              <Link
+                href="/activity"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+              >
+                Browse verified results
+              </Link>
+            </div>
+            <div className="mt-12">
+              <LiveStats />
+            </div>
+          </div>
+        </section>
+
+        <section id="how" className="scroll-mt-16 border-y border-slate-200 bg-white">
+          <div className="mx-auto max-w-6xl px-4 py-16">
+            <h2 className="text-2xl font-bold text-slate-900">How Verity works</h2>
+            <p className="mt-1 max-w-2xl text-sm text-slate-600">
+              Commit, execute, sign, re-execute, dispute: the same optimistic-verification idea behind rollup fraud proofs, applied to
+              everyday computations.
+            </p>
+            <ol className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+              {STEPS.map((s, i) => (
+                <li key={s.title} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
+                      {i + 1}
+                    </span>
+                    <s.icon className="h-4 w-4 text-blue-600" aria-hidden />
+                  </div>
+                  <h3 className="mt-3 font-semibold text-slate-900">{s.title}</h3>
+                  <p className="mt-1 text-sm text-slate-600">{s.body}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        <section className="mx-auto max-w-6xl px-4 py-16">
+          <h2 className="text-2xl font-bold text-slate-900">What you get</h2>
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {GUARANTEES.map((g) => (
+              <div key={g.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <g.icon className="h-5 w-5 text-blue-600" aria-hidden />
+                <h3 className="mt-3 font-semibold text-slate-900">{g.title}</h3>
+                <p className="mt-1 text-sm text-slate-600">{g.body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <RecentActivity />
+
+        <RuleSets />
+
+        <section className="mx-auto max-w-6xl px-4 pb-20">
+          <div className="flex flex-col items-start justify-between gap-6 rounded-2xl bg-slate-900 p-8 text-white sm:flex-row sm:items-center">
+            <div>
+              <h2 className="text-xl font-bold">Don&apos;t trust the provider. Check the work.</h2>
+              <p className="mt-1 text-sm text-slate-300">Sign in with Google, connect a devnet wallet, and submit your first verifiable computation.</p>
+            </div>
+            <Link
+              href="/create-job"
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-slate-900 hover:bg-slate-100"
+            >
+              Get started <ArrowRight className="h-4 w-4" aria-hidden />
+            </Link>
+          </div>
+        </section>
+      </main>
+
+      <footer className="border-t border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-xs text-slate-500">
+          <span>Verity · verifiable computation on Solana {env.cluster}</span>
+          <span className="flex flex-wrap gap-4">
+            {programUrl && (
+              <a href={programUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-slate-800">
+                verity_core {shortKey(env.programId, 4)} <ExternalLink className="h-3 w-3" aria-hidden />
+              </a>
+            )}
+            <Link href="/rulesets" className="hover:text-slate-800">
+              Rule sets
+            </Link>
+            <Link href="/activity" className="hover:text-slate-800">
+              Audit trail
+            </Link>
+          </span>
+        </div>
+      </footer>
+    </div>
   );
 }

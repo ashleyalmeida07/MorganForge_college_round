@@ -33,7 +33,7 @@ from app.routes.common import (
     output_uri_for,
     tx_link,
 )
-from app.schemas import BootstrapIn, ChaosIn, SimulateIn, TamperIn
+from app.schemas import BootstrapIn, ChaosIn, SimulateIn, SuiteIn, TamperIn
 from app.utils import canonical, sha256_hex
 
 log = logging.getLogger("verity.routes.admin")
@@ -408,7 +408,7 @@ async def admin_scenarios() -> dict[str, Any]:
 @router.post("/simulate", status_code=202)
 async def admin_simulate(body: SimulateIn, user: User = Depends(require_admin)) -> dict[str, Any]:
     """Start a full end-to-end adversarial simulation and return its id."""
-    from app.simulation import SCENARIOS, start_simulation
+    from app.simulation import SCENARIOS, SimulationBusy, start_simulation
 
     scenario = body.scenario.strip()
     if scenario not in SCENARIOS:
@@ -417,6 +417,8 @@ async def admin_simulate(body: SimulateIn, user: User = Depends(require_admin)) 
         sim = start_simulation(scenario, fast=body.fast, bounty=body.bounty)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
+    except SimulationBusy as e:
+        raise HTTPException(409, str(e)) from e
     except RuntimeError as e:
         raise HTTPException(503, str(e)) from e
     await asyncio.to_thread(_audit, "SimulationStarted", {"scenario": scenario, "sim_id": sim.id, "by": user.id}, user)
@@ -438,3 +440,38 @@ async def admin_simulation(sim_id: str) -> dict[str, Any]:
     if sim is None:
         raise HTTPException(404, "simulation not found")
     return sim
+
+
+@router.post("/simulate-all", status_code=202)
+async def admin_simulate_all(body: SuiteIn | None = Body(default=None), user: User = Depends(require_admin)) -> dict[str, Any]:
+    """Run every adversarial scenario (or `scenarios`) back to back; poll GET /admin/suites/{id}."""
+    from app.simulation import SimulationBusy, start_suite
+
+    body = body or SuiteIn()
+    try:
+        suite = start_suite(body.scenarios, fast=body.fast, bounty=body.bounty)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except SimulationBusy as e:
+        raise HTTPException(409, str(e)) from e
+    await asyncio.to_thread(
+        _audit, "SimulationSuiteStarted", {"suite_id": suite.id, "scenarios": suite.scenarios, "by": user.id}, user
+    )
+    return suite.snapshot()
+
+
+@router.get("/suites")
+async def admin_suites(limit: int = 5) -> dict[str, Any]:
+    from app.simulation import busy, list_suites
+
+    return {"suites": list_suites(max(1, min(limit, 25))), "busy": busy()}
+
+
+@router.get("/suites/{suite_id}")
+async def admin_suite(suite_id: str) -> dict[str, Any]:
+    from app.simulation import get_suite
+
+    suite = get_suite(suite_id)
+    if suite is None:
+        raise HTTPException(404, "suite not found")
+    return suite

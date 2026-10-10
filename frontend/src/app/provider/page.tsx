@@ -59,7 +59,7 @@ export default function ConnectProviderPage() {
   const { publicKey, connected } = useWallet();
   const program = useVerityProgram();
 
-  const providers = useApi<Provider[]>('/providers', 15000);
+  const providers = useApi<Provider[]>('/providers', 15000, [{ table: 'providers' }]);
   const health = useApi<Health>('/health', 10000);
 
   const [copied, setCopied] = useState<string | null>(null);

@@ -21,14 +21,12 @@ function Shell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen w-full bg-slate-50 font-sans text-slate-900">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-          {/* Full page load: the landing page boots Webflow/GSAP scripts. */}
-          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-          <a href="/" className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <Link href="/" className="flex items-center gap-2 text-sm font-semibold text-slate-900">
             <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-600 text-white">
               <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
             </span>
             Verity
-          </a>
+          </Link>
           <span className="text-xs text-slate-500">Public verification · no login required</span>
         </div>
       </header>

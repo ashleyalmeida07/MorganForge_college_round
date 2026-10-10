@@ -116,8 +116,17 @@ Implementations: `backend/app/engine/trace.py`, `frontend/src/lib/trace.ts`, `ru
 ## Off-chain audit log anchoring
 
 ```
-row_hash = sha256_hex(prev_hash_hex_ascii || canonical_json(payload))      genesis prev_hash = "0" * 64
+hash_version 1 (rows written before migration 0003, computed by the backend):
+  row_hash = sha256_hex(prev_hash_hex_ascii || canonical_json(payload))
+hash_version 2 (computed by the database trigger public.audit_log_chain):
+  row_hash = sha256_hex(utf8(join(0x1f, ["VERITY_AUDIT_V2", prev_hash, event_type, request_pda or "",
+                                         actor or "", tx_sig or "", slot as decimal or "", payload::text])))
+genesis prev_hash = "0" * 64
 ```
+
+`payload::text` is Postgres' jsonb rendering (keys ordered by length then bytes, `", "` / `": "`
+separators); read it with the PostgREST cast `payload_text:payload::text`. The trigger also assigns
+`seq` and `prev_hash` under an advisory lock, so the chain cannot be forked by concurrent writers.
 
 The backend periodically writes the newest `row_hash` on-chain with `anchor_audit_root` (`Config.latest_audit_root`, `audit_root_count`).
 

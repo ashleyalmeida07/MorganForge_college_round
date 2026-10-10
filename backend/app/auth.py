@@ -1,4 +1,5 @@
 """Supabase JWT auth (Google login) as FastAPI dependencies."""
+import hmac
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -24,11 +25,15 @@ class User:
         return self.role == "admin" or (self.email or "").lower() in settings.admin_email_list
 
 
-def _decode(token: str) -> dict[str, Any]:
-    if token in ("dev-admin-token", "admin", "dev-admin") or (settings.cluster != "mainnet-beta" and token.startswith("dev-")):
-        admin_email = settings.admin_email_list[0] if settings.admin_email_list else "support@arhamfintech.ai"
-        return {"sub": "dev-admin-uuid", "email": admin_email, "role": "admin", "exp": time.time() + 86400}
+def _is_dev_admin_token(token: str) -> bool:
+    """Opt-in shared secret for local/E2E admin calls. Off unless DEV_ADMIN_TOKEN is set; never on mainnet."""
+    secret = settings.dev_admin_token
+    if not secret or settings.cluster == "mainnet-beta":
+        return False
+    return hmac.compare_digest(token.encode(), secret.encode())
 
+
+def _decode(token: str) -> dict[str, Any]:
     cached = _token_cache.get(token)
     if cached and cached[0] > time.time():
         return cached[1]
@@ -81,7 +86,10 @@ def _ensure_profile(claims: dict[str, Any]) -> str:
 def _user_from_header(authorization: str | None) -> User | None:
     if not authorization or not authorization.lower().startswith("bearer "):
         return None
-    claims = _decode(authorization.split(" ", 1)[1].strip())
+    token = authorization.split(" ", 1)[1].strip()
+    if _is_dev_admin_token(token):
+        return User(id="dev-admin", email=None, role="admin")
+    claims = _decode(token)
     role = _ensure_profile(claims)
     return User(id=claims["sub"], email=claims.get("email"), role=role)
 
@@ -100,26 +108,8 @@ async def get_optional_user(authorization: str | None = Header(default=None)) ->
         return None
 
 
-async def require_admin(authorization: str | None = Header(default=None)) -> User:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        if settings.cluster != "mainnet-beta":
-            admin_email = settings.admin_email_list[0] if settings.admin_email_list else "support@arhamfintech.ai"
-            return User(id="dev-admin", email=admin_email, role="admin")
-        raise HTTPException(401, "missing bearer token")
-    try:
-        user = _user_from_header(authorization)
-    except Exception as e:
-        if settings.cluster != "mainnet-beta":
-            admin_email = settings.admin_email_list[0] if settings.admin_email_list else "support@arhamfintech.ai"
-            return User(id="dev-admin", email=admin_email, role="admin")
-        raise HTTPException(401, f"invalid token: {e}") from e
-    if user is None:
-        if settings.cluster != "mainnet-beta":
-            admin_email = settings.admin_email_list[0] if settings.admin_email_list else "support@arhamfintech.ai"
-            return User(id="dev-admin", email=admin_email, role="admin")
-        raise HTTPException(401, "missing bearer token")
+async def require_admin(user: User = Depends(get_current_user)) -> User:
+    """Admin = verified Supabase user with profiles.role='admin' or an email in ADMIN_EMAILS."""
     if not user.is_admin:
-        if settings.cluster != "mainnet-beta":
-            return User(id=user.id, email=user.email, role="admin")
         raise HTTPException(403, "admin only")
     return user

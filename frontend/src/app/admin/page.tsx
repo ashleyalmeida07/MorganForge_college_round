@@ -21,26 +21,27 @@ import {
   ArrowUpRight,
   Zap,
   CheckCircle2,
-  XCircle,
-  Layers,
   Lock,
-  FileCode,
   Check,
   RotateCcw,
+  ListChecks,
+  XCircle,
 } from "lucide-react";
 
 import { AppShell } from "@/components/ui/efferd-dashboard-2-utils/app-shell";
 import {
+  ApiError,
   apiGet,
   apiPost,
   type AdminConfig,
+  type Me,
   type DisputeRow,
   type SimulationDetail,
-  type SimStep,
+  type SuiteDetail,
 } from "@/lib/api";
 import { useApi } from "@/lib/hooks";
 import { shortKey, lamportsToSol } from "@/lib/utils";
-import { env, explorerAddress, explorerTx } from "@/lib/env";
+import { env, explorerTx } from "@/lib/env";
 
 // ------------------------------------------------------------------ types
 
@@ -95,6 +96,7 @@ const CHAOS_ORDER = [
   "STORAGE_TAMPER_OUTPUT",
   "PROVIDER_BAD_SIG",
   "VERIFIER_LAZY",
+  "ZK_CORRUPT_PROOF",
 ];
 
 const CHAOS_DETAILS: Record<string, ChaosMeta> = {
@@ -138,6 +140,13 @@ const CHAOS_DETAILS: Record<string, ChaosMeta> = {
     desc: "Verifier Node #1 copies provider output hash blindly without independent WASM re-execution.",
     detection: "Lazy verifier is outvoted by honest quorum (2/3) when malicious provider attempts fraud.",
     onChainResult: "Lazy vote recorded on-chain; honest consensus slashes provider and penalizes bad attestations.",
+    severity: "high",
+  },
+  ZK_CORRUPT_PROOF: {
+    label: "Corrupted zk Proof",
+    desc: "Any Groth16 payroll proof submitted while armed (by the lab or the request page's zk panel) has proof A negated before it is sent.",
+    detection: "The verity_zk_verifier pairing check fails on-chain: the corrupted proof does not satisfy the verifying key.",
+    onChainResult: "verify_payroll rejected with InvalidProof; no zk proof record is written for the request.",
     severity: "high",
   },
 };
@@ -189,6 +198,33 @@ const SCENARIOS = [
     targetOutcome: "Zero-Trust Hash Mismatch",
   },
   {
+    id: "storage-input",
+    label: "Tampered Input Blob",
+    badge: "STORAGE MUTATION",
+    tone: "amber" as const,
+    desc: "Committed input JSON overwritten in storage → provider & verifiers re-hash it against the chain and refuse to run.",
+    flags: { STORAGE_TAMPER_INPUT: true },
+    targetOutcome: "Expired (Execution Refused)",
+  },
+  {
+    id: "frivolous-dispute",
+    label: "Frivolous Dispute",
+    badge: "GRIEFING",
+    tone: "amber" as const,
+    desc: "Honest result challenged with a made-up hash → verifier quorum backs the provider → challenger forfeits stake.",
+    flags: {},
+    targetOutcome: "Provider Wins Dispute → Verified",
+  },
+  {
+    id: "zk-corrupt-proof",
+    label: "Corrupted zk Proof",
+    badge: "ZK FORGERY",
+    tone: "red" as const,
+    desc: "Attacker submits a corrupted Groth16 proof for an honest payroll result → on-chain pairing check rejects it.",
+    flags: { ZK_CORRUPT_PROOF: true },
+    targetOutcome: "verify_payroll Rejected (InvalidProof)",
+  },
+  {
     id: "honest",
     label: "Honest Baseline",
     badge: "HONEST CONSENSUS",
@@ -227,7 +263,49 @@ function Countdown({ endsAt, className }: { endsAt: string | null | undefined; c
 
 // ------------------------------------------------------------------ page component
 
-export default function AdminChaosPage() {
+export default function AdminPage() {
+  const me = useApi<Me>("/me");
+
+  if (me.data?.is_admin) return <AdminChaosPage />;
+
+  const denied = me.error instanceof ApiError && (me.error.status === 401 || me.error.status === 403);
+  return (
+    <AppShell>
+      <div className="w-full max-w-xl mx-auto py-20 px-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <Lock className="w-8 h-8 mx-auto text-slate-400" />
+          {me.loading && !me.data && !me.error ? (
+            <p className="mt-4 text-sm text-slate-500">Checking admin access…</p>
+          ) : me.error && !denied ? (
+            <>
+              <h1 className="mt-4 text-lg font-bold text-slate-900">Couldn&apos;t reach the backend</h1>
+              <p className="mt-2 text-sm text-slate-500">{me.error.message}</p>
+              <button
+                onClick={me.reload}
+                className="mt-5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Retry
+              </button>
+            </>
+          ) : (
+            <>
+              <h1 className="mt-4 text-lg font-bold text-slate-900">Admin access required</h1>
+              <p className="mt-2 text-sm text-slate-500">
+                The simulation lab can flip chaos flags and tamper with stored blobs, so it is limited to accounts listed in the
+                backend&apos;s <code className="font-mono">ADMIN_EMAILS</code> or with the admin role.
+              </p>
+              <Link href="/dashboard" className="mt-5 inline-block text-sm font-semibold text-blue-600 hover:underline">
+                Back to dashboard
+              </Link>
+            </>
+          )}
+        </div>
+      </div>
+    </AppShell>
+  );
+}
+
+function AdminChaosPage() {
   const [togglingFlag, setTogglingFlag] = useState<string | null>(null);
   const [activeJob, setActiveJob] = useState<string | null>(null);
   const [jobResult, setJobResult] = useState<string | null>(null);
@@ -241,6 +319,8 @@ export default function AdminChaosPage() {
   const [activeSim, setActiveSim] = useState<SimulationDetail | null>(null);
   const [selectedScenario, setSelectedScenario] = useState<string>("malicious-provider");
   const [terminalFilter, setTerminalFilter] = useState<"all" | "chain" | "warn" | "exec">("all");
+  const [suite, setSuite] = useState<SuiteDetail | null>(null);
+  const suiteRunning = suite?.status === "running";
   const terminalEndRef = useRef<HTMLDivElement>(null);
 
   // Storage tamper sandbox
@@ -250,10 +330,10 @@ export default function AdminChaosPage() {
   const [tamperResult, setTamperResult] = useState<TamperResult | null>(null);
   const [tamperError, setTamperError] = useState<string | null>(null);
 
-  const chaos = useApi<ChaosResponse>("/admin/chaos", 4000);
+  const chaos = useApi<ChaosResponse>("/admin/chaos", 4000, [{ table: "chaos_flags" }]);
   const config = useApi<AdminConfig>("/admin/config", 8000);
-  const disputes = useApi<DisputeRow[]>("/disputes", 4000);
-  const activity = useApi<ActivityRow[]>("/activity?limit=14", 5000);
+  const disputes = useApi<DisputeRow[]>("/disputes", 4000, [{ table: "disputes" }]);
+  const activity = useApi<ActivityRow[]>("/activity?limit=14", 5000, [{ table: "audit_log" }]);
 
   const flags = useMemo<ChaosFlag[]>(() => {
     const raw = chaos.data;
@@ -308,14 +388,15 @@ export default function AdminChaosPage() {
   );
 
   // Poll active simulation updates
+  const simStatus = activeSim?.status;
   useEffect(() => {
-    if (!activeSimId || !activeSim || activeSim.status !== "running") return;
+    if (!activeSimId || simStatus !== "running") return;
     const timer = setInterval(async () => {
       try {
         const updated = await apiGet<SimulationDetail>(`/admin/simulate/${activeSimId}`);
         setActiveSim(updated);
         if (updated.result?.pda && !tamperPda) setTamperPda(updated.result.pda);
-        if (updated.status !== "running") {
+        if (updated.status !== "running" && !suiteRunning) {
           setSimulating(false);
           refreshAll();
         }
@@ -324,7 +405,55 @@ export default function AdminChaosPage() {
       }
     }, 1200);
     return () => clearInterval(timer);
-  }, [activeSimId, activeSim?.status, refreshAll, tamperPda]);
+  }, [activeSimId, simStatus, refreshAll, tamperPda, suiteRunning]);
+
+  // Run every scenario back to back (server-side, so it survives navigation).
+  const runAllScenarios = useCallback(async () => {
+    setJobResult(null);
+    try {
+      const started = await apiPost<SuiteDetail>("/admin/simulate-all", { fast: true, bounty: 10_000_000 });
+      setSuite(started);
+      setSimulating(true);
+    } catch (err) {
+      setJobResult(`Failed to start the suite: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, []);
+
+  // Resume showing a suite that is still running (e.g. after a page reload).
+  useEffect(() => {
+    apiGet<{ suites: SuiteDetail[] }>("/admin/suites?limit=1")
+      .then((r) => {
+        const latest = r.suites?.[0];
+        if (latest) setSuite(latest);
+        if (latest?.status === "running") setSimulating(true);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Poll the suite; stream whichever scenario is running into the terminal.
+  const suiteId = suite?.id;
+  useEffect(() => {
+    if (!suiteId || !suiteRunning) return;
+    const timer = setInterval(async () => {
+      try {
+        const s = await apiGet<SuiteDetail>(`/admin/suites/${suiteId}`);
+        setSuite(s);
+        const run = s.runs.find((r) => r.status === "running");
+        if (run?.sim_id && run.sim_id !== activeSimId) {
+          setSelectedScenario(run.scenario);
+          setActiveSimId(run.sim_id);
+          setActiveSim(await apiGet<SimulationDetail>(`/admin/simulate/${run.sim_id}`));
+        }
+        if (s.status !== "running") {
+          setSimulating(false);
+          refreshAll();
+        }
+      } catch {
+        // ignore transient poll error
+      }
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [suiteId, suiteRunning, activeSimId, refreshAll]);
 
   // Auto-scroll terminal
   useEffect(() => {
@@ -422,7 +551,6 @@ export default function AdminChaosPage() {
   const pipelineState = useMemo(() => {
     if (!activeSim) return { stage: 0, label: "Idle / Ready" };
     const steps = activeSim.steps || [];
-    const lastStep = steps[steps.length - 1];
     const isDone = activeSim.status !== "running";
 
     if (isDone) {
@@ -443,14 +571,15 @@ export default function AdminChaosPage() {
     return { stage: 1, label: "Setting Up Sandbox Environment" };
   }, [activeSim]);
 
+  const simSteps = activeSim?.steps;
   const filteredSteps = useMemo(() => {
-    if (!activeSim?.steps) return [];
-    if (terminalFilter === "all") return activeSim.steps;
-    if (terminalFilter === "chain") return activeSim.steps.filter((s) => s.level === "chain" || s.tx);
-    if (terminalFilter === "warn") return activeSim.steps.filter((s) => s.level === "warn" || s.level === "error");
-    if (terminalFilter === "exec") return activeSim.steps.filter((s) => s.level === "exec" || s.level === "ok");
-    return activeSim.steps;
-  }, [activeSim?.steps, terminalFilter]);
+    if (!simSteps) return [];
+    if (terminalFilter === "all") return simSteps;
+    if (terminalFilter === "chain") return simSteps.filter((s) => s.level === "chain" || s.tx);
+    if (terminalFilter === "warn") return simSteps.filter((s) => s.level === "warn" || s.level === "error");
+    if (terminalFilter === "exec") return simSteps.filter((s) => s.level === "exec" || s.level === "ok");
+    return simSteps;
+  }, [simSteps, terminalFilter]);
 
   const statCards = [
     {
@@ -653,9 +782,78 @@ export default function AdminChaosPage() {
 
           {/* Scenario Selector Chips */}
           <div className="space-y-3 pt-2">
-            <div className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-              Choose Attack Vector To Simulate:
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                Choose Attack Vector To Simulate:
+              </div>
+              <button
+                onClick={runAllScenarios}
+                disabled={simulating}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-red-500/60 bg-red-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-lg shadow-red-900/40 transition hover:bg-red-500 disabled:opacity-50"
+              >
+                <ListChecks className="h-3.5 w-3.5" />
+                {suiteRunning ? `Running ${Math.min((suite?.completed ?? 0) + 1, suite?.total ?? 1)}/${suite?.total ?? 1}…` : "Run All Scenarios"}
+              </button>
             </div>
+
+            {suite && (
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                  <span className="text-slate-300">
+                    Adversarial suite <span className="text-slate-500">#{suite.id}</span> ·{" "}
+                    {suite.status === "running" ? (
+                      <span className="text-amber-400">running {suite.completed}/{suite.total}</span>
+                    ) : (
+                      <span className={suite.failed ? "text-red-400" : "text-emerald-400"}>
+                        {suite.passed}/{suite.total} passed
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-slate-500">{Math.round(suite.elapsed_s)}s elapsed</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+                  <div
+                    className={`h-full transition-all ${suite.failed ? "bg-red-500" : "bg-emerald-500"}`}
+                    style={{ width: `${suite.total ? (100 * suite.completed) / suite.total : 0}%` }}
+                  />
+                </div>
+                <ul className="grid gap-1.5 sm:grid-cols-2">
+                  {suite.runs.map((r) => (
+                    <li
+                      key={r.scenario}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-1.5 text-[11px] font-mono"
+                    >
+                      <span className="flex min-w-0 items-center gap-1.5 text-slate-200">
+                        {r.status === "running" ? (
+                          <RefreshCw className="h-3 w-3 shrink-0 animate-spin text-blue-400" />
+                        ) : r.status === "pending" ? (
+                          <Clock className="h-3 w-3 shrink-0 text-slate-500" />
+                        ) : r.passed ? (
+                          <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-400" />
+                        ) : (
+                          <XCircle className="h-3 w-3 shrink-0 text-red-400" />
+                        )}
+                        <span className="truncate">{r.label}</span>
+                      </span>
+                      <span className="shrink-0 text-slate-500">
+                        {r.status === "pending"
+                          ? "queued"
+                          : r.status === "running"
+                          ? "running"
+                          : r.error
+                          ? "error"
+                          : `${r.final_status ?? "?"}${r.detected ? " · detected" : ""}`}
+                        {r.request_pda && (
+                          <Link href={`/requests/${r.request_pda}`} className="ml-2 text-blue-400 hover:underline">
+                            open
+                          </Link>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {SCENARIOS.map((sc) => {
                 const isSelected = selectedScenario === sc.id;
@@ -964,7 +1162,7 @@ export default function AdminChaosPage() {
                 <Scale className="w-4 h-4 text-amber-600" /> Staked Dispute Resolution Quorum Monitor
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Quorum threshold of counted verifier attestations (≥2 of 3) confirms Challenger's claimed hash → Malicious Provider slashed.
+                Quorum threshold of counted verifier attestations (≥2 of 3) confirms Challenger&apos;s claimed hash → Malicious Provider slashed.
               </p>
             </div>
             <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">

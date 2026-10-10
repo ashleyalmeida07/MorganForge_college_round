@@ -5,6 +5,7 @@
 //  3. forged public output (inflated net pay) -> InvalidProof
 //  4. proof replayed onto another request -> InvalidProof (bound to the request PDA)
 //  5. proof for a different input than the request committed -> InputMismatch
+//  6. corrupted proof bytes (proof A negated, scenario 9) -> InvalidProof
 //
 // Usage: DEPLOYER_KEYPAIR=/path/deployer.json node scripts/zk-smoke.mjs
 import { Ed25519Program, SYSVAR_INSTRUCTIONS_PUBKEY } from "@solana/web3.js";
@@ -102,6 +103,15 @@ await expectError(() => verifyTx(r3, input, p3, p3.tax, p3.net + 100000n), /Inva
 const other = { salary_cents: 2000000, tax_bps: 2000, deductions_cents: 50000 };
 const pOther = await provePayroll(other, r3);
 await expectError(() => verifyTx(r3, other, pOther), /InputMismatch|0x1772/, "proof of a different input");
+
+console.log("\n== 6. corrupted proof bytes (scenario 9, ZK_CORRUPT_PROOF) ==");
+// Same corruption the backend simulation and the browser use: negate proof A (still on the curve).
+const BN254_P = 21888242871839275222246405745257275088696311157297823662689037894645226208583n;
+const y = BigInt("0x" + Buffer.from(p3.a.slice(32)).toString("hex"));
+const negY = Buffer.from(((BN254_P - y) % BN254_P).toString(16).padStart(64, "0"), "hex");
+const corrupt = { ...p3, a: [...p3.a.slice(0, 32), ...negY] };
+await expectError(() => verifyTx(r3, input, corrupt), /InvalidProof|0x1774/, "corrupted proof (A negated)");
+
 await verifyTx(r3, input, p3);
 check((await zk.account.zkProofRecord.fetch(Z.record(r3))).matchesReceipt, "valid proof still accepted after failures");
 

@@ -8,14 +8,16 @@ import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from urllib.parse import urlparse
 
 import base58
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from nacl.exceptions import BadSignatureError
 from nacl.signing import VerifyKey
 
 from app.audit import append_event
 from app.auth import User, get_current_user
+from app.config import settings
 from app.db import first, table, upsert
 from app.routes.common import addr_link, parse_iso
 from app.schemas import WalletLinkIn, WalletNonceIn, WalletNonceOut
@@ -59,8 +61,40 @@ def _decode_signature(sig: str) -> bytes:
     raise HTTPException(400, "signature must be a 64-byte ed25519 signature (base58, base64 or hex)")
 
 
-def build_message(wallet: str, nonce: str, issued_at: str) -> str:
-    return f"Sign to authenticate and link your Solana wallet to Verity. Nonce: {nonce}"
+def _iso_z(dt: datetime) -> str:
+    return dt.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def resolve_origin(origin_header: str | None) -> str:
+    """The frontend origin the message is bound to: the caller's Origin if it is an allowed CORS origin."""
+    allowed = settings.cors_origins
+    if origin_header and origin_header.rstrip("/") in allowed:
+        return origin_header.rstrip("/")
+    if not allowed:
+        raise HTTPException(500, "FRONTEND_ORIGIN is not configured")
+    return allowed[0]
+
+
+def build_message(
+    *, origin: str, wallet: str, nonce: str, issued_at: str, expires_at: str, email: str | None = None
+) -> str:
+    """Sign-In-With-Solana (CAIP-122) message; wallets parse it and warn if `domain` is not the requesting site."""
+    domain = urlparse(origin).netloc
+    chain_id = "mainnet" if settings.cluster == "mainnet-beta" else settings.cluster
+    account = f" ({email})" if email else ""
+    return (
+        f"{domain} wants you to sign in with your Solana account:\n"
+        f"{wallet}\n"
+        "\n"
+        f"Link this wallet to your Verity account{account}. This does not send a transaction or cost any fees.\n"
+        "\n"
+        f"URI: {origin}\n"
+        "Version: 1\n"
+        f"Chain ID: {chain_id}\n"
+        f"Nonce: {nonce}\n"
+        f"Issued At: {issued_at}\n"
+        f"Expiration Time: {expires_at}"
+    )
 
 
 
@@ -70,14 +104,25 @@ def _user_wallets(user_id: str) -> list[dict[str, Any]]:
 
 
 @router.post("/auth/wallet/nonce", response_model=WalletNonceOut)
-async def wallet_nonce(body: WalletNonceIn, user: User = Depends(get_current_user)) -> WalletNonceOut:
+async def wallet_nonce(
+    body: WalletNonceIn,
+    user: User = Depends(get_current_user),
+    origin: str | None = Header(default=None),
+) -> WalletNonceOut:
     wallet = body.wallet.strip()
     _decode_pubkey(wallet)
     now = datetime.now(timezone.utc)
-    nonce = secrets.token_urlsafe(18)
-    issued_at = now.replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    message = build_message(wallet, nonce, issued_at)
-    expires_at = (now + NONCE_TTL).isoformat()
+    nonce = secrets.token_hex(16)  # SIWS nonces must be alphanumeric
+    expires = now + NONCE_TTL
+    message = build_message(
+        origin=resolve_origin(origin),
+        wallet=wallet,
+        nonce=nonce,
+        issued_at=_iso_z(now),
+        expires_at=_iso_z(expires),
+        email=user.email,
+    )
+    expires_at = expires.isoformat()
     await asyncio.to_thread(
         lambda: table("wallet_nonces").insert({
             "nonce": nonce,

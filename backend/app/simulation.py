@@ -112,6 +112,30 @@ SCENARIOS: dict[str, dict[str, Any]] = {
         "deadline": DEFAULT_DEADLINE_SECS,
         "severity": "medium",
     },
+    "frivolous-dispute": {
+        "label": "Frivolous dispute",
+        "desc": "An honest result is challenged with a made-up output hash. The verifier quorum sides with the provider and the challenger's stake is forfeited.",
+        "flags": {},
+        "expect": ["Verified"],
+        "detected": True,
+        "needs_window": True,
+        "deadline": DEFAULT_DEADLINE_SECS,
+        "action": "frivolous_dispute",
+        "dispute": "ProviderWon",
+        "severity": "medium",
+    },
+    "zk-corrupt-proof": {
+        "label": "Corrupted zk proof",
+        "desc": "An attacker submits a corrupted Groth16 proof for an honest payroll result. The on-chain verifier rejects the transaction (InvalidProof).",
+        "flags": {"ZK_CORRUPT_PROOF": True},
+        "expect": ["Verified"],
+        "detected": True,
+        "needs_window": True,
+        "deadline": DEFAULT_DEADLINE_SECS,
+        "action": "zk_corrupt_proof",
+        "program": "payroll",
+        "severity": "high",
+    },
 }
 
 _EVENT_LEVEL = {
@@ -133,6 +157,7 @@ _EVENT_LEVEL = {
     "LazyAttestation": "warn",
     "ExecutionFailed": "error",
     "WorkerError": "error",
+    "ZkProofRejected": "verdict",
 }
 
 _SUMMARY_KEYS = (
@@ -213,8 +238,22 @@ _order: list[str] = []
 _tasks: set[asyncio.Task] = set()
 
 
-def start_simulation(scenario: str, *, fast: bool = True, bounty: int = DEFAULT_BOUNTY) -> Sim:
-    """Create a simulation and schedule its background task (call from the event loop)."""
+class SimulationBusy(RuntimeError):
+    """Another simulation or suite is running (chaos flags are global, so runs cannot overlap)."""
+
+
+def busy() -> str | None:
+    """Id of the running suite or simulation, if any."""
+    for suite in _suites.values():
+        if suite.status == "running":
+            return suite.id
+    for sim in _sims.values():
+        if sim.status == "running":
+            return sim.id
+    return None
+
+
+def _new_sim(scenario: str) -> Sim:
     if scenario not in SCENARIOS:
         raise ValueError(f"unknown scenario {scenario!r}; expected one of {sorted(SCENARIOS)}")
     sim = Sim(id=uuid.uuid4().hex[:12], scenario=scenario, label=SCENARIOS[scenario]["label"])
@@ -222,10 +261,121 @@ def start_simulation(scenario: str, *, fast: bool = True, bounty: int = DEFAULT_
     _order.append(sim.id)
     while len(_order) > MAX_SIMS:
         _sims.pop(_order.pop(0), None)
-    task = asyncio.create_task(_run(sim, fast=fast, bounty=int(bounty)))
+    return sim
+
+
+def _spawn(coro: Any) -> None:
+    task = asyncio.create_task(coro)
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)
+
+
+def start_simulation(scenario: str, *, fast: bool = True, bounty: int = DEFAULT_BOUNTY) -> Sim:
+    """Create a simulation and schedule its background task (call from the event loop)."""
+    if scenario not in SCENARIOS:
+        raise ValueError(f"unknown scenario {scenario!r}; expected one of {sorted(SCENARIOS)}")
+    running = busy()
+    if running:
+        raise SimulationBusy(f"simulation {running} is still running; wait for it to finish")
+    sim = _new_sim(scenario)
+    _spawn(_run(sim, fast=fast, bounty=int(bounty)))
     return sim
+
+
+# ------------------------------------------------------------------ suite ("run all")
+
+@dataclass
+class Suite:
+    id: str
+    scenarios: list[str]
+    status: str = "running"
+    started_at: str = field(default_factory=utcnow_iso)
+    finished_at: str | None = None
+    current: str | None = None
+    runs: list[dict[str, Any]] = field(default_factory=list)
+    _t0: float = field(default_factory=time.time)
+
+    def snapshot(self) -> dict[str, Any]:
+        done = [r for r in self.runs if r.get("status") in ("done", "error")]
+        passed = sum(1 for r in done if r.get("passed"))
+        return {
+            "id": self.id,
+            "status": self.status,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+            "elapsed_s": round(time.time() - self._t0, 2),
+            "current": self.current,
+            "total": len(self.scenarios),
+            "completed": len(done),
+            "passed": passed,
+            "failed": len(done) - passed,
+            "runs": self.runs,
+        }
+
+
+_suites: dict[str, Suite] = {}
+
+
+def run_passed(scenario: str, result: dict[str, Any], error: str | None = None) -> bool:
+    """A run passes when it settled as expected and the attack (if any) was detected."""
+    if error or not result.get("matched_expectation"):
+        return False
+    return bool(result.get("detected")) == bool(SCENARIOS[scenario]["detected"])
+
+
+def start_suite(scenarios: list[str] | None = None, *, fast: bool = True, bounty: int = DEFAULT_BOUNTY) -> Suite:
+    """Run every scenario (or the given ones) back to back in one background task."""
+    chosen = list(scenarios or SCENARIOS.keys())
+    unknown = [s for s in chosen if s not in SCENARIOS]
+    if unknown:
+        raise ValueError(f"unknown scenario(s) {unknown}; expected some of {sorted(SCENARIOS)}")
+    running = busy()
+    if running:
+        raise SimulationBusy(f"simulation {running} is still running; wait for it to finish")
+    suite = Suite(id=uuid.uuid4().hex[:12], scenarios=chosen)
+    suite.runs = [{"scenario": s, "label": SCENARIOS[s]["label"], "status": "pending"} for s in chosen]
+    _suites[suite.id] = suite
+    while len(_suites) > MAX_SIMS:
+        _suites.pop(next(iter(_suites)))
+    _spawn(_run_suite(suite, fast=fast, bounty=int(bounty)))
+    return suite
+
+
+async def _run_suite(suite: Suite, *, fast: bool, bounty: int) -> None:
+    try:
+        for i, scenario in enumerate(suite.scenarios):
+            sim = _new_sim(scenario)
+            suite.current = scenario
+            suite.runs[i].update(status="running", sim_id=sim.id)
+            await _run(sim, fast=fast, bounty=bounty)
+            suite.runs[i].update(
+                status=sim.status,
+                passed=run_passed(scenario, sim.result, sim.error),
+                detected=sim.result.get("detected"),
+                final_status=sim.result.get("final_status"),
+                expected=sim.result.get("expected"),
+                request_pda=sim.result.get("request_pda"),
+                error=sim.error,
+                duration_s=sim.result.get("duration_s"),
+            )
+    except Exception as e:  # noqa: BLE001 - keep the suite record consistent
+        logger.exception("suite %s failed", suite.id)
+        for run in suite.runs:
+            if run["status"] in ("pending", "running"):
+                run.update(status="error", passed=False, error=f"{type(e).__name__}: {e}")
+    finally:
+        suite.current = None
+        suite.finished_at = utcnow_iso()
+        suite.status = "done"
+
+
+def get_suite(suite_id: str) -> dict[str, Any] | None:
+    suite = _suites.get(suite_id)
+    return suite.snapshot() if suite else None
+
+
+def list_suites(limit: int = 5) -> list[dict[str, Any]]:
+    return [s.snapshot() for s in list(_suites.values())[-limit:][::-1]]
 
 
 def get_simulation(sim_id: str) -> dict[str, Any] | None:
@@ -274,7 +424,8 @@ async def _run(sim: Sim, *, fast: bool, bounty: int) -> None:
             await asyncio.to_thread(set_chaos_flag, flag, False)
         sim.add("info", "setup", "Cleared all chaos flags (baseline: honest network)")
 
-        await _ensure_funds(chain, sim, requester, bounty + 20_000_000, "requester")
+        extra = int((await chain.get_config() or {}).get("min_dispute_stake") or 0) if sc.get("action") else 0
+        await _ensure_funds(chain, sim, requester, bounty + extra + 20_000_000, "requester")
 
         cfg = await _retry(chain.get_config, what="get_config")
         if not cfg:
@@ -311,11 +462,14 @@ async def _run(sim: Sim, *, fast: bool, bounty: int) -> None:
         sim.result["challenge_window_secs"] = int(cfg.get("challenge_window_secs") or 0)
 
         # 3. pick a rule set + commit the input -----------------------------
-        program = await asyncio.to_thread(_pick_program)
-        if not program:
-            raise RuntimeError("no rule set with example_input registered — run scripts/seed_rulesets.py")
+        if sc.get("program") == "payroll":
+            program, example = await _pick_payroll_program()
+        else:
+            program = await asyncio.to_thread(_pick_program)
+            if not program:
+                raise RuntimeError("no rule set with example_input registered — run scripts/seed_rulesets.py")
+            example = program.get("example_input")
         program_hash = str(program["program_hash"]).lower()
-        example = program.get("example_input")
         sim.add("info", "prepare", f"Rule set: {program.get('name') or _short(program_hash)} ({_short(program_hash)})")
 
         canonical_bytes = canonical(example)
@@ -367,6 +521,7 @@ async def _run(sim: Sim, *, fast: bool, bounty: int) -> None:
         hiccups = 0
         last_forced: dict[str, float] = {}
         timed_out = False
+        action_result: dict[str, Any] | None = None
         while time.time() - t0 < MAX_SIM_SECONDS:
             try:
                 req = await _retry(lambda: chain.get_request(pda), attempts=5, what="get_request")
@@ -386,6 +541,10 @@ async def _run(sim: Sim, *, fast: bool, bounty: int) -> None:
                 last_status = status
             if status in TERMINAL:
                 break
+
+            # Adversarial actions run once, right after the honest receipt lands.
+            if sc.get("action") and action_result is None and status == "AwaitingVerification":
+                action_result = await _run_action(sim, sc["action"], chain, requester, pda, example)
 
             # Re-assert the scenario flags: the provider reads them only at
             # execution time, and another operator may have reset them.
@@ -426,7 +585,7 @@ async def _run(sim: Sim, *, fast: bool, bounty: int) -> None:
         if sim.scenario == "storage-output":
             tampered_blob = await _check_output_tampered(sim, pda)
 
-        detected = _detected(sim.scenario, final_status, timed_out, tampered_blob)
+        detected = _detected(sim.scenario, final_status, timed_out, tampered_blob, action_result, dispute)
         matched = terminal_reached and final_status in sc["expect"]
 
         sim.result.update(
@@ -438,6 +597,7 @@ async def _run(sim: Sim, *, fast: bool, bounty: int) -> None:
             provider_slashed_delta=slashed_after - slashed_before,
             provider_slashed_total=slashed_after,
             output_blob_tampered=tampered_blob,
+            action=action_result,
             detected=detected,
             matched_expectation=matched,
             timed_out=timed_out,
@@ -499,6 +659,75 @@ async def _run(sim: Sim, *, fast: bool, bounty: int) -> None:
 
 
 # ------------------------------------------------------------------ helpers
+
+async def _pick_payroll_program() -> tuple[dict[str, Any], dict[str, int]]:
+    """The payroll rule set registered in the zk verifier, with an input in its exact on-chain format."""
+    from app.chain.zk import PAYROLL_FIELDS, get_zk_config
+
+    cfg = await _retry(get_zk_config, what="get_zk_config")
+    if not cfg:
+        raise RuntimeError("zk verifier not configured on this cluster (run programs/verity_core/scripts/setup-zk.mjs)")
+    payroll_hash = str(cfg["payroll_program_hash"]).lower()
+    program = await asyncio.to_thread(db_program_by_hash, payroll_hash)
+    if not program:
+        raise RuntimeError(f"payroll rule set {payroll_hash[:12]}… is not registered — run scripts/seed_rulesets.py")
+    example = program.get("example_input") or {}
+    try:
+        payroll_input = {k: int(example[k]) for k in PAYROLL_FIELDS}
+    except (KeyError, TypeError, ValueError) as e:
+        raise RuntimeError(f"payroll example_input is missing {e}") from e
+    return program, payroll_input
+
+
+def db_program_by_hash(program_hash: str) -> dict[str, Any] | None:
+    rows = table("programs").select("*").eq("program_hash", program_hash).limit(1).execute().data or []
+    return rows[0] if rows else None
+
+
+async def _run_action(sim: Sim, action: str, chain: Any, requester: Any, pda: str, example: Any) -> dict[str, Any]:
+    """Play the attacker for action scenarios; never raises (the outcome is the evidence)."""
+    from app.chain.client import ChainError
+
+    if action == "frivolous_dispute":
+        import os
+
+        claimed = os.urandom(32)
+        sim.add("warn", "attack", f"Requester disputes the honest receipt, claiming output {claimed.hex()[:12]}…")
+        try:
+            sig = await _send_retry(lambda: chain.open_dispute(requester, pda, claimed), sim=sim, what="open_dispute", attempts=2)
+        except ChainError as e:
+            sim.add("error", "attack", f"open_dispute failed: {e.code or str(e)[:120]}")
+            return {"opened": False, "error": e.code or str(e)[:200]}
+        sim.add("chain", "attack", "Frivolous dispute opened — stake escrowed; verifier quorum will decide", tx=sig)
+        return {"opened": True, "tx": sig}
+
+    if action == "zk_corrupt_proof":
+        from app.chain.zk import submit_corrupt_proof
+        from app.db import chaos
+
+        if not chaos("ZK_CORRUPT_PROOF"):
+            sim.add("warn", "attack", "ZK_CORRUPT_PROOF is not armed; skipping the corrupt proof")
+            return {"rejected": False, "skipped": True}
+        sim.add("warn", "attack", "Submitting a corrupted Groth16 proof (proof A negated) to verity_zk_verifier")
+        try:
+            sig = await submit_corrupt_proof(requester, pda, example)
+        except ChainError as e:
+            rejected = e.code == "InvalidProof"
+            sim.add(
+                "verdict" if rejected else "error", "zk",
+                f"verify_payroll rejected on-chain: {e.code or 'error'}" if rejected
+                else f"verify_payroll failed for another reason: {e.code or str(e)[:120]}",
+                tx=e.signature,
+            )
+            return {"rejected": rejected, "code": e.code, "tx": e.signature}
+        except Exception as e:  # noqa: BLE001
+            sim.add("error", "zk", f"Could not submit the corrupt proof: {str(e)[:140]}")
+            return {"rejected": False, "error": str(e)[:200]}
+        sim.add("error", "zk", "CORRUPT PROOF ACCEPTED — the zk verifier did not reject it", tx=sig)
+        return {"rejected": False, "tx": sig}
+
+    raise ValueError(f"unknown action {action!r}")
+
 
 def _pick_program() -> dict[str, Any] | None:
     rows = table("programs").select("*").execute().data or []
@@ -657,11 +886,22 @@ async def _check_output_tampered(sim: Sim, pda: str) -> bool:
     return False
 
 
-def _detected(scenario: str, final_status: str, timed_out: bool, tampered_blob: bool) -> bool:
+def _detected(
+    scenario: str,
+    final_status: str,
+    timed_out: bool,
+    tampered_blob: bool,
+    action_result: dict[str, Any] | None = None,
+    dispute: dict[str, Any] | None = None,
+) -> bool:
     if scenario == "honest":
         return False
     if scenario == "storage-output":
         return tampered_blob
+    if scenario == "zk-corrupt-proof":
+        return bool(action_result and action_result.get("rejected"))
+    if scenario == "frivolous-dispute":
+        return bool(action_result and action_result.get("opened")) and (dispute or {}).get("status") == "ProviderWon"
     if timed_out:
         return False
     return final_status != "Verified"

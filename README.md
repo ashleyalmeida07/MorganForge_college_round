@@ -22,11 +22,14 @@ payroll rule set.
 
 ```
 programs/verity_core/   Anchor program (on-chain source of truth) + devnet deploy scripts
-rulesets/                deterministic WASM rule sets (payroll, loan, tax, stats, risk, ml)
+rulesets/                deterministic WASM rule sets (payroll, loan, tax, stats, risk, ml); build_all.sh
 backend/                 FastAPI API + provider/verifier/finalizer workers — see backend/README.md
 frontend/                Next.js app — see frontend/README.md
 zk/                      Groth16 circuit + setup for the zk-verified payroll rule set
 supabase/                SQL migrations (schema, RLS, hash-chained audit log)
+scripts/                 deploy_program.sh|.py, seed_rulesets.py, verity_cli.py, apply_migrations.py
+.github/workflows/ci.yml CI: pytest + Postgres, next build, rule-set determinism, program tests on a local validator
+.env.example             every environment variable, grouped by where it is read
 ```
 
 ## Run locally
@@ -39,6 +42,13 @@ supabase/                SQL migrations (schema, RLS, hash-chained audit log)
 
 ## Adversarial testing
 
-Chaos flags (tampered output, swapped program, tampered blobs, forged signature, lazy verifier)
-are toggled from `/admin` or `POST /admin/chaos` and exercised by `backend/tests/test_adversarial.py`
-— see the table in `backend/README.md` §5.
+Chaos flags (tampered output, swapped program, tampered blobs, forged signature, lazy verifier,
+corrupted zk proof) are toggled from `/admin` or `POST /admin/chaos`; "Run all scenarios" in `/admin`
+runs the whole simulation lab on devnet. Scenarios 1–9 are tested at three levels:
+
+- `backend/tests/test_adversarial_offline.py`: no network, every CI run
+- `programs/verity_core/tests/verity_core.test.mjs` + `scripts/zk-smoke.mjs`: the programs on a local validator, every CI run
+- `backend/tests/test_adversarial.py`: against a deployment + devnet (`VERITY_E2E=1`, or CI `workflow_dispatch`)
+
+`rulesets/build_all.sh` rebuilds the rule sets and checks that wasmtime (backend) and V8 (browser)
+produce identical outputs and traces. See the table in `backend/README.md` §5.

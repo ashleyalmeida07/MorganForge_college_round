@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Loader2, CheckCircle2, ExternalLink, ArrowRight } from 'lucide-react';
 
+import { defaultsFor, isFormSchema, SchemaForm, validateSchema, type JsonSchema } from '@/components/forms/SchemaForm';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -33,8 +34,11 @@ const shortHash = (h?: string | null) => {
   const s = normHex(h);
   return s ? `${s.slice(0, 8)}…${s.slice(-4)}` : '—';
 };
-const exampleText = (p?: Program) =>
-  p && p.example_input !== undefined && p.example_input !== null ? JSON.stringify(p.example_input, null, 2) : '{}';
+function exampleText(p?: Program): string {
+  if (p && p.example_input !== undefined && p.example_input !== null) return JSON.stringify(p.example_input, null, 2);
+  if (p && isFormSchema(p.input_schema)) return JSON.stringify(defaultsFor(p.input_schema) ?? {}, null, 2);
+  return '{}';
+}
 
 function Chevron() {
   return (
@@ -80,7 +84,9 @@ function CreateJobForm() {
   const [deadlineMin, setDeadlineMin] = useState(30);
 
   const [inputHash, setInputHash] = useState<string | null>(null);
+  const [canonicalText, setCanonicalText] = useState<string | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [mode, setMode] = useState<'form' | 'json'>('form');
 
   const [running, setRunning] = useState(false);
   const [step, setStep] = useState<string | null>(null);
@@ -90,6 +96,22 @@ function CreateJobForm() {
   const selected = useMemo(
     () => programs?.find((p) => p.program_hash === programHash),
     [programs, programHash],
+  );
+  const rawSchema: unknown = selected?.input_schema;
+  const formSchema: JsonSchema | null = isFormSchema(rawSchema) ? rawSchema : null;
+  const showForm = mode === 'form' && !!formSchema;
+
+  // The JSON text is the single source of truth; the form edits it through parse/stringify.
+  const parsedInput = useMemo<{ ok: boolean; value?: unknown }>(() => {
+    try {
+      return { ok: true, value: JSON.parse(inputText) };
+    } catch {
+      return { ok: false };
+    }
+  }, [inputText]);
+  const schemaErrors = useMemo(
+    () => (formSchema && parsedInput.ok ? validateSchema(formSchema, parsedInput.value) : []),
+    [formSchema, parsedInput],
   );
 
   // Auto-select the rule set from ?program=<hash> (from /rulesets), else the first one, once the list loads.
@@ -110,6 +132,7 @@ function CreateJobForm() {
     } catch (e) {
       setParseError(e instanceof Error ? e.message : 'Invalid JSON');
       setInputHash(null);
+      setCanonicalText(null);
       return;
     }
     let canon: string;
@@ -118,9 +141,11 @@ function CreateJobForm() {
     } catch (e) {
       setParseError(e instanceof Error ? e.message : 'Invalid JSON');
       setInputHash(null);
+      setCanonicalText(null);
       return;
     }
     setParseError(null);
+    setCanonicalText(canon);
     sha256Hex(canon)
       .then((h) => !cancelled && setInputHash(h))
       .catch(() => !cancelled && setInputHash(null));
@@ -137,7 +162,7 @@ function CreateJobForm() {
   const bountyNum = Number(bountySol);
   const bountyValid = Number.isFinite(bountyNum) && bountyNum > 0;
   const walletReady = connected && !!publicKey && !!verity;
-  const canSubmit = !running && !!selected && !parseError && bountyValid;
+  const canSubmit = !running && !!selected && !parseError && schemaErrors.length === 0 && bountyValid;
 
   const reset = () => {
     setSuccess(null);
@@ -160,6 +185,10 @@ function CreateJobForm() {
       input = JSON.parse(inputText);
     } catch {
       setError('Input is not valid JSON.');
+      return;
+    }
+    if (schemaErrors.length) {
+      setError(`Input does not match the rule set's schema: ${schemaErrors[0]}`);
       return;
     }
 
@@ -352,21 +381,71 @@ function CreateJobForm() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className={LABEL_CLASS}>Input (JSON)</Label>
-                  <textarea
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    disabled={running || !selected}
-                    rows={10}
-                    spellCheck={false}
-                    className={`${FIELD_CLASS} font-mono text-sm`}
-                  />
+                  <div className="flex items-center justify-between gap-3">
+                    <Label className={LABEL_CLASS}>Input</Label>
+                    {formSchema && (
+                      <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs font-semibold">
+                        {(['form', 'json'] as const).map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => setMode(m)}
+                            className={`rounded-md px-3 py-1 transition ${
+                              mode === m ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                            }`}
+                          >
+                            {m === 'form' ? 'Form' : 'JSON'}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {showForm && formSchema ? (
+                    parsedInput.ok ? (
+                      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                        <SchemaForm
+                          schema={formSchema}
+                          value={parsedInput.value}
+                          onChange={(v) => setInputText(JSON.stringify(v ?? {}, null, 2))}
+                          disabled={running || !selected}
+                        />
+                      </div>
+                    ) : (
+                      <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
+                        The input JSON is not valid, so the form cannot show it. Fix it in the JSON tab.
+                      </p>
+                    )
+                  ) : (
+                    <textarea
+                      value={inputText}
+                      onChange={(e) => setInputText(e.target.value)}
+                      disabled={running || !selected}
+                      rows={10}
+                      spellCheck={false}
+                      className={`${FIELD_CLASS} font-mono text-sm`}
+                    />
+                  )}
+                  {schemaErrors.length > 0 && (
+                    <ul className="space-y-0.5 text-xs text-red-600">
+                      {schemaErrors.slice(0, 6).map((e) => (
+                        <li key={e}>{e}</li>
+                      ))}
+                    </ul>
+                  )}
                   {parseError ? (
                     <p className="text-xs text-red-600">Invalid JSON: {parseError}</p>
                   ) : (
-                    <p className="text-xs text-slate-500 break-all">
-                      Input hash: <span className="font-mono">{inputHash ?? '…'}</span>
-                    </p>
+                    <div className="space-y-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                        Canonical JSON (what gets hashed and committed on-chain)
+                      </p>
+                      <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-slate-700">
+                        {canonicalText ?? '…'}
+                      </pre>
+                      <p className="text-xs text-slate-500 break-all">
+                        Input hash (SHA-256): <span className="font-mono">{inputHash ?? '…'}</span>
+                      </p>
+                    </div>
                   )}
                 </div>
 

@@ -1,4 +1,6 @@
-"""Adversarial end-to-end scenarios (Implementation_plan.md §10) against a live deployment.
+"""Adversarial end-to-end scenarios 1-9 (Implementation_plan.md §10) against a live deployment.
+
+The same scenarios run without a network in tests/test_adversarial_offline.py (always, in CI).
 
 These tests drive a *running* Verity backend (workers enabled) and the Solana
 devnet program. They are skipped unless VERITY_E2E=1.
@@ -6,7 +8,7 @@ devnet program. They are skipped unless VERITY_E2E=1.
 Environment:
     VERITY_E2E=1                      enable the suite
     VERITY_API_URL                    e.g. https://verity-api.onrender.com (default http://localhost:8000)
-    VERITY_ADMIN_TOKEN                Supabase access token (JWT) of an admin user
+    VERITY_ADMIN_TOKEN                Supabase access token (JWT) of an admin user, or the backend's DEV_ADMIN_TOKEN
     REQUESTER_KEYPAIR_JSON            funded devnet keypair that creates requests / opens disputes
     VERITY_PROGRAM_HASH               optional: rule set to use (default: first program with example_input)
     VERITY_TEST_INPUT_JSON            optional: input JSON for that program (default: its example_input)
@@ -36,7 +38,7 @@ pytestmark = [
 ]
 
 API_URL = os.environ.get("VERITY_API_URL", "http://localhost:8000").rstrip("/")
-ADMIN_TOKEN = os.environ.get("VERITY_ADMIN_TOKEN", "dev-admin-token")
+ADMIN_TOKEN = os.environ.get("VERITY_ADMIN_TOKEN") or os.environ.get("DEV_ADMIN_TOKEN", "")
 BOUNTY = int(os.environ.get("VERITY_TEST_BOUNTY_LAMPORTS", "10000000"))
 TIMEOUT = int(os.environ.get("VERITY_TEST_TIMEOUT", "420"))
 POLL_SECS = 3.0
@@ -48,6 +50,7 @@ CHAOS_FLAGS = [
     "STORAGE_TAMPER_OUTPUT",
     "PROVIDER_BAD_SIG",
     "VERIFIER_LAZY",
+    "ZK_CORRUPT_PROOF",
 ]
 
 _STATE: dict[str, Any] = {}
@@ -487,6 +490,29 @@ def test_08_frivolous_dispute_slashes_challenger(e2e: E2E):
     assert req["status"] == "Verified"
     bal_after = e2e.run(e2e.chain.get_balance(e2e.requester.pubkey()))
     assert bal_after <= bal_before - stake, "challenger stake was not forfeited"
+
+
+def test_09_corrupt_zk_proof_rejected_on_chain(e2e: E2E):
+    """Scenario 9: a corrupted Groth16 proof for a payroll request -> verify_payroll fails (InvalidProof)."""
+    from app.chain.client import ChainError
+    from app.chain.zk import PAYROLL_FIELDS, get_zk_config, get_zk_record, submit_corrupt_proof
+
+    cfg = e2e.run(get_zk_config())
+    if not cfg:
+        pytest.skip("verity_zk_verifier not configured on this cluster")
+    if e2e.program["program_hash"].lower() != cfg["payroll_program_hash"]:
+        pytest.skip("VERITY_PROGRAM_HASH is not the zk payroll rule set")
+    e2e.chaos(ZK_CORRUPT_PROOF=True)
+    inp = {k: int(e2e.base_input[k]) for k in PAYROLL_FIELDS}
+    inp["salary_cents"] += random.randint(1, 997) * 100
+    job = e2e.submit("corrupt zk proof", inp=inp)
+    e2e.wait(job["pda"], {"AwaitingVerification", "Verified", "Disputed", "Rejected"}, label="receipt")
+
+    with pytest.raises(ChainError) as exc:
+        e2e.run(submit_corrupt_proof(e2e.requester, job["pda"], inp))
+    assert exc.value.code == "InvalidProof", f"expected InvalidProof, got {exc.value.code}: {exc.value}"
+    print(f"  rejected tx {exc.value.signature}")
+    assert e2e.run(get_zk_record(job["pda"])) is None, "no proof record may exist for a corrupt proof"
 
 
 def test_99_audit_log_chain_intact(e2e: E2E):

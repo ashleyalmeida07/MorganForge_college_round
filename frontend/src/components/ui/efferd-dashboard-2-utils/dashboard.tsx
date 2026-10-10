@@ -84,9 +84,9 @@ export function Dashboard() {
     setNow(Date.now());
   }, []);
 
-  const { data: stats, error: statsError, loading: statsLoading } = useApi<Stats>('/stats', 15000);
-  const { data: requests, error: reqError } = useApi<RequestRow[]>('/requests?scope=all&limit=200', 30000);
-  const { data: activity, error: actError } = useApi<ActivityRow[]>('/activity?limit=20', 15000);
+  const { data: stats, error: statsError, loading: statsLoading } = useApi<Stats>('/stats', 15000, [{ table: 'requests' }, { table: 'disputes' }, { table: 'programs' }]);
+  const { data: requests, error: reqError } = useApi<RequestRow[]>('/requests?scope=all&limit=200', 30000, [{ table: 'requests' }]);
+  const { data: activity, error: actError } = useApi<ActivityRow[]>('/activity?limit=20', 15000, [{ table: 'audit_log' }]);
 
   const backendError = statsError ?? reqError ?? actError;
   const online = !statsError && !!stats;

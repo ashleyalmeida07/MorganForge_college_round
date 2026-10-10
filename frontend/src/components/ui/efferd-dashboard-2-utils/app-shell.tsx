@@ -51,14 +51,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div>
             <div className="text-xs font-semibold text-slate-500 mb-2 px-4 uppercase tracking-wider">Menu</div>
             <div className="space-y-1 px-3">
-              {/* Full page load: the landing page boots Webflow/GSAP scripts. */}
-              {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-              <a href="/">
+              <Link href="/">
                 <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md">
                   <Home className="mr-3 h-4 w-4 text-slate-400" />
                   Home Page
                 </Button>
-              </a>
+              </Link>
               {NAV.map(({ href, label, icon: Icon }) => {
                 const active = pathname === href || pathname.startsWith(`${href}/`);
                 return (

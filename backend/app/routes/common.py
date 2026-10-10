@@ -9,6 +9,7 @@ from typing import Any, Awaitable, Callable
 
 import base58
 
+from app.audit import AUDIT_SELECT
 from app.chain import indexer
 from app.chain.client import get_chain
 from app.chain.signer import input_commitment_message, receipt_message, verify_receipt
@@ -128,7 +129,7 @@ def db_program(program_hash: str | None) -> dict[str, Any] | None:
 
 def db_audit_rows(pda: str, limit: int = 500) -> list[dict[str, Any]]:
     return (
-        table("audit_log").select("*").eq("request_pda", pda).order("seq").limit(limit).execute().data or []
+        table("audit_log").select(AUDIT_SELECT).eq("request_pda", pda).order("seq").limit(limit).execute().data or []
     )
 
 

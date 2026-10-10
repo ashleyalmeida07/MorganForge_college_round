@@ -1,7 +1,7 @@
-/* Tailwind is commented out to prevent conflicts with Webflow CSS reset */
 @import "tailwindcss";
 
 @theme inline {
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
   --color-success: var(--success);
@@ -88,7 +88,11 @@
   --warning-foreground: oklch(0.828 0.189 84.429);
 }
 
-/* Any Next.js specific overrides can go here */
+@layer base {
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+}
 
 .chaos-grid {
   display: grid;
