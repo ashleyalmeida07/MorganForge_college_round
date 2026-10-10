@@ -1,0 +1,8 @@
+/* Tailwind is commented out to prevent conflicts with Webflow CSS reset */
+/* @import "tailwindcss"; */
+
+:root {
+  /* Retaining some base variables just in case */
+}
+
+/* Any Next.js specific overrides can go here */
