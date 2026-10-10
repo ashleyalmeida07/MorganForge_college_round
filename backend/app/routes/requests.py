@@ -27,6 +27,7 @@ from app.routes.common import (
     call_any,
     chain_or_none,
     chain_read,
+    compute_integrity,
     db_input_commitment,
     db_program,
     db_request,
@@ -336,6 +337,47 @@ async def reverify_request(pda: str) -> dict[str, Any]:
     if b is None:
         raise HTTPException(404, "request not found")
     report = await reexecute(b)
+    integrity = await compute_integrity(b)
+    report["integrity"] = integrity
+
+    checks: list[dict[str, Any]] = []
+    # 1. Input blob check
+    if "input" in integrity:
+        inp_ok = integrity["input"].get("status") == "ok"
+        checks.append({
+            "target": "input",
+            "expected_hash": integrity["input"].get("expected"),
+            "actual_hash": integrity["input"].get("actual"),
+            "ok": inp_ok,
+            "match": inp_ok,
+            "valid": inp_ok,
+            "status": integrity["input"].get("status"),
+        })
+    # 2. Output blob check (if receipt committed)
+    if "output" in integrity and integrity["output"].get("status") != "pending":
+        out_ok = integrity["output"].get("status") == "ok"
+        checks.append({
+            "target": "output",
+            "expected_hash": integrity["output"].get("expected"),
+            "actual_hash": integrity["output"].get("actual"),
+            "ok": out_ok,
+            "match": out_ok,
+            "valid": out_ok,
+            "status": integrity["output"].get("status"),
+        })
+    # 3. Signature check
+    if "receipt_signature" in integrity:
+        sig_ok = integrity["receipt_signature"].get("status") == "valid"
+        checks.append({
+            "target": "signature",
+            "ok": sig_ok,
+            "valid": sig_ok,
+            "match": sig_ok,
+            "status": integrity["receipt_signature"].get("status"),
+        })
+    report["checks"] = checks
+    report["all_ok"] = all(c.get("ok", True) for c in checks) if checks else report.get("matches", False)
+
     attestations = b.get("attestations") or []
     if report.get("output_hash"):
         report["verifier_agreement"] = [
@@ -348,6 +390,7 @@ async def reverify_request(pda: str) -> dict[str, Any]:
             for a in attestations
         ]
     return report
+
 
 
 async def refresh_request(pda: str) -> dict[str, Any] | None:

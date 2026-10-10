@@ -10,8 +10,7 @@ import { Label } from "@/components/ui/label";
 import { apiPost } from "@/lib/api";
 import { explorerTx } from "@/lib/env";
 import { fromHex } from "@/lib/hash";
-import { useVerityProgram } from "@/lib/hooks";
-import { lamportsToSol, openDispute } from "@/lib/solana";
+import { lamportsToSol, openDispute, useVerityProgram } from "@/lib/solana";
 
 import type { ChainDispute, ChallengeInfo, DisputeRow } from "./types";
 import { errorMessage, ExtLink, fmtDuration, HashValue, normHex, Panel, Pill } from "./ui";

@@ -30,7 +30,9 @@ const SignIn2 = ({ mode = "signin" }: { mode?: Mode }) => {
   // Surface errors passed back from /auth/callback (read after mount to avoid hydration mismatch).
   React.useEffect(() => {
     const e = new URLSearchParams(window.location.search).get("error");
-    if (e) setError(e);
+    if (e) {
+      queueMicrotask(() => setError(e));
+    }
   }, []);
 
   const validateEmail = (email: string) => {

@@ -74,33 +74,29 @@ CHAOS_FLAGS = [
     "VERIFIER_LAZY",
 ]
 
-_chaos_cache: dict[str, Any] = {"at": 0.0, "flags": {}}
+import threading
+
+_chaos_lock = threading.Lock()
+_chaos_state: dict[str, bool] = {flag: False for flag in CHAOS_FLAGS}
 
 
-def get_chaos_flags(max_age: float = 3.0) -> dict[str, bool]:
-    if time.time() - _chaos_cache["at"] > max_age:
-        try:
-            rows = table("chaos_flags").select("name,enabled").execute().data or []
-            flags = {f: False for f in CHAOS_FLAGS}
-            flags.update({r["name"]: bool(r["enabled"]) for r in rows})
-            _chaos_cache.update(at=time.time(), flags=flags)
-        except Exception:
-            pass
-    return dict(_chaos_cache["flags"]) or {f: False for f in CHAOS_FLAGS}
+def get_chaos_flags(max_age: float = 0.0) -> dict[str, bool]:
+    with _chaos_lock:
+        return dict(_chaos_state)
 
 
 def chaos(name: str) -> bool:
-    return get_chaos_flags().get(name, False)
+    with _chaos_lock:
+        return bool(_chaos_state.get(name, False))
 
 
 def set_chaos_flag(name: str, enabled: bool) -> None:
     from app.utils import utcnow_iso
 
-    if "flags" not in _chaos_cache or not _chaos_cache["flags"]:
-        _chaos_cache["flags"] = {f: False for f in CHAOS_FLAGS}
-    _chaos_cache["flags"][name] = enabled
-    _chaos_cache["at"] = time.time()
+    with _chaos_lock:
+        _chaos_state[name] = enabled
     try:
         upsert("chaos_flags", {"name": name, "enabled": enabled, "updated_at": utcnow_iso()})
     except Exception:
         pass
+

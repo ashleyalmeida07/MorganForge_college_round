@@ -10,7 +10,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { apiGet, apiPost, type Me } from "@/lib/api";
 import { explorerAddress } from "@/lib/env";
 import { toBase64 } from "@/lib/hash";
-import { shortKey } from "@/lib/solana";
+import { shortKey } from "@/lib/utils";
 
 /** Compact wallet connect/link control for the app top bar. */
 export function WalletButton() {

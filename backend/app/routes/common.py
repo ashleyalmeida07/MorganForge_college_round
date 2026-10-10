@@ -489,6 +489,22 @@ async def reexecute(b: dict[str, Any]) -> dict[str, Any]:
         report["fuel_matches"] = (
             int(exp["fuel_used"]) == res.fuel_used if exp["fuel_used"] is not None else None
         )
+    if uris.get("output"):
+        (out_blob, out_blob_err) = await fetch_blob(uris["output"])
+        if out_blob is not None:
+            stored_oh = sha256_hex(out_blob)
+            report["stored_output_hash"] = stored_oh
+            expected_oh = exp.get("output_hash")
+            if expected_oh:
+                blob_match = (stored_oh.lower() == expected_oh.lower())
+                report["output_blob_ok"] = blob_match
+                report["output_ok"] = blob_match
+                if not blob_match:
+                    report["output_status"] = "tampered"
+                    report["matches"] = False
+        elif out_blob_err and exp.get("output_hash"):
+            report["output_blob_ok"] = False
+            report["output_ok"] = False
     return report
 
 
@@ -566,7 +582,6 @@ async def trace_report(b: dict[str, Any], *, recompute: bool = True) -> dict[str
                 "agreed_prefix": idx,
             }
     return report
-
 
 # ------------------------------------------------------------------ timeline
 

@@ -1,6 +1,6 @@
-// verity_core program client for wallet-signed transactions (requester / challenger / provider staking).
+import { useMemo } from "react";
 import { AnchorProvider, BN, Program, type Idl } from "@coral-xyz/anchor";
-import type { AnchorWallet } from "@solana/wallet-adapter-react";
+import { useAnchorWallet, useConnection, type AnchorWallet } from "@solana/wallet-adapter-react";
 import { LAMPORTS_PER_SOL, PublicKey, type Connection } from "@solana/web3.js";
 
 import { env } from "@/lib/env";
@@ -41,6 +41,12 @@ export function getProgram(connection: Connection, wallet: AnchorWallet): Progra
   const provider = new AnchorProvider(connection, wallet, { commitment: "confirmed", preflightCommitment: "confirmed" });
   const idl = { ...(idlJson as Idl), address: PROGRAM_ID.toBase58() };
   return new Program(idl, provider) as unknown as Program<VerityCore>;
+}
+
+export function useVerityProgram() {
+  const { connection } = useConnection();
+  const wallet = useAnchorWallet();
+  return useMemo(() => (wallet ? getProgram(connection, wallet) : null), [connection, wallet]);
 }
 
 export async function fetchConfig(program: Program<VerityCore>) {

@@ -11,10 +11,11 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { AppShell } from '@/components/ui/efferd-dashboard-2-utils/app-shell';
 
-import { useApi, useVerityProgram } from '@/lib/hooks';
+import { useApi } from '@/lib/hooks';
 import { apiPost, ApiError, type PrepareOut, type Program } from '@/lib/api';
 import { canonicalJson, concatBytes, fromHex, sha256Hex, toBase64 } from '@/lib/hash';
-import { createRequest, predictRequestPda, LAMPORTS_PER_SOL, shortKey } from '@/lib/solana';
+import { createRequest, predictRequestPda, LAMPORTS_PER_SOL, useVerityProgram } from '@/lib/solana';
+import { shortKey } from '@/lib/utils';
 import { explorerAddress, explorerTx } from '@/lib/env';
 
 const INPUT_COMMITMENT_DOMAIN = new TextEncoder().encode('VERITY_INPUT_V1');

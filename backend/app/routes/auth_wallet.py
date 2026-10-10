@@ -60,13 +60,8 @@ def _decode_signature(sig: str) -> bytes:
 
 
 def build_message(wallet: str, nonce: str, issued_at: str) -> str:
-    return (
-        "Verity wants you to sign in with your Solana account:\n"
-        f"{wallet}\n\n"
-        "Link this wallet to your Verity account.\n\n"
-        f"Nonce: {nonce}\n"
-        f"Issued At: {issued_at}"
-    )
+    return f"Sign to authenticate and link your Solana wallet to Verity. Nonce: {nonce}"
+
 
 
 def _user_wallets(user_id: str) -> list[dict[str, Any]]:

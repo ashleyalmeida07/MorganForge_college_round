@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { AlertTriangle, Fingerprint, Loader2, ShieldCheck, Terminal } from "lucide-react";
@@ -54,7 +55,7 @@ function CliHint({ pda }: { pda: string }) {
   );
 }
 
-export default function PublicVerifyPage() {
+function PublicVerifyContent() {
   const params = useParams<{ pda: string }>();
   const pda = decodeURIComponent(params?.pda ?? "");
   const { data: detail, error, loading } = useApi<RequestDetail>(pda ? `/requests/${pda}` : null);
@@ -168,5 +169,21 @@ export default function PublicVerifyPage() {
         </p>
       </div>
     </Shell>
+  );
+}
+
+export default function PublicVerifyPage() {
+  return (
+    <Suspense
+      fallback={
+        <Shell>
+          <div className="flex min-h-[40vh] items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+          </div>
+        </Shell>
+      }
+    >
+      <PublicVerifyContent />
+    </Suspense>
   );
 }

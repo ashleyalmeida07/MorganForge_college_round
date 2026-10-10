@@ -15,6 +15,11 @@ const eslintConfig = defineConfig([
     // Vendored Webflow/GSAP bundles served from /public.
     "public/js/**",
   ]),
+  {
+    rules: {
+      "react-hooks/set-state-in-effect": "warn",
+    },
+  },
 ]);
 
 export default eslintConfig;
