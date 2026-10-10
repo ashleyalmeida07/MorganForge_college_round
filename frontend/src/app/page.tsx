@@ -3,12 +3,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 import React, { useEffect } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { User, LogOut } from "lucide-react";
-import Link from "next/link";
 
 export default function Page() {
-  const { data: session } = useSession();
+  const { user: session, displayName, avatarUrl, signOut } = useAuth();
   useEffect(() => {
     const scripts = [
       "/js/jquery.js?site=69d7f44961b88686fd48eee3",
@@ -389,17 +388,17 @@ mask-image: linear-gradient(to bottom, transparent 0%, black 100%);
                     {session ? (
                       <div className="flex items-center gap-2">
                         <a href="/dashboard" className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition bg-white/10 py-1.5 px-3 rounded-full border border-white/20">
-                          {session.user?.image ? (
-                            <img src={session.user.image} alt={session.user?.name || "User"} className="w-6 h-6 rounded-full" />
+                          {avatarUrl ? (
+                            <img src={avatarUrl} alt={displayName || "User"} className="w-6 h-6 rounded-full" />
                           ) : (
                             <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
                               <User className="w-3.5 h-3.5" />
                             </div>
                           )}
-                          <span className="text-sm font-medium text-white">{session.user?.name || "Ashley Almeida"}</span>
+                          <span className="text-sm font-medium text-white">{displayName || "My account"}</span>
                         </a>
                         <button
-                          onClick={() => signOut({ callbackUrl: '/' })}
+                          onClick={signOut}
                           className="flex items-center gap-1 text-xs text-white/70 hover:text-white px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 transition cursor-pointer"
                           title="Log Out"
                         >
