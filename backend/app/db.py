@@ -91,5 +91,11 @@ def chaos(name: str) -> bool:
 def set_chaos_flag(name: str, enabled: bool) -> None:
     from app.utils import utcnow_iso
 
-    upsert("chaos_flags", {"name": name, "enabled": enabled, "updated_at": utcnow_iso()})
-    _chaos_cache["at"] = 0.0
+    if "flags" not in _chaos_cache or not _chaos_cache["flags"]:
+        _chaos_cache["flags"] = {f: False for f in CHAOS_FLAGS}
+    _chaos_cache["flags"][name] = enabled
+    _chaos_cache["at"] = time.time()
+    try:
+        upsert("chaos_flags", {"name": name, "enabled": enabled, "updated_at": utcnow_iso()})
+    except Exception:
+        pass

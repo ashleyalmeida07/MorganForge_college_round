@@ -46,7 +46,8 @@ def _audit(event_type: str, payload: dict[str, Any], user: User, request_pda: st
 @router.get("/chaos")
 async def get_chaos() -> dict[str, Any]:
     flags = await asyncio.to_thread(get_chaos_flags, 0.0)
-    return {"flags": flags, "available": CHAOS_FLAGS}
+    items = [{"name": f, "enabled": bool(flags.get(f, False))} for f in CHAOS_FLAGS]
+    return {"flags": flags, "available": CHAOS_FLAGS, "items": items}
 
 
 @router.post("/chaos")
@@ -57,7 +58,8 @@ async def set_chaos(body: ChaosIn, user: User = Depends(require_admin)) -> dict[
     await asyncio.to_thread(set_chaos_flag, flag, body.enabled)
     await asyncio.to_thread(_audit, "ChaosFlagChanged", {"flag": flag, "enabled": body.enabled, "by": user.id}, user)
     flags = await asyncio.to_thread(get_chaos_flags, 0.0)
-    return {"flags": flags, "available": CHAOS_FLAGS}
+    items = [{"name": f, "enabled": bool(flags.get(f, False))} for f in CHAOS_FLAGS]
+    return {"flags": flags, "available": CHAOS_FLAGS, "items": items}
 
 
 # ------------------------------------------------------------------ tamper

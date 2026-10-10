@@ -65,7 +65,12 @@ class Report:
         for check, result, detail in self.rows:
             print(f"{check.ljust(w1)}  {result.ljust(6)}  {detail}")
         print(line)
-        print("OVERALL:", "FAIL" if self.failed else "PASS")
+        if self.failed:
+            print("OVERALL: FAIL")
+            print("INTEGRITY VERIFICATION FAILED \u274c")
+        else:
+            print("OVERALL: PASS")
+            print("INTEGRITY VERIFIED: ALL CHECKS PASS \u2705")
 
 
 def short(h: str | None, n: int = 16) -> str:

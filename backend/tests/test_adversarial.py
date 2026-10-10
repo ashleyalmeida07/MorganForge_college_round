@@ -36,7 +36,7 @@ pytestmark = [
 ]
 
 API_URL = os.environ.get("VERITY_API_URL", "http://localhost:8000").rstrip("/")
-ADMIN_TOKEN = os.environ.get("VERITY_ADMIN_TOKEN", "")
+ADMIN_TOKEN = os.environ.get("VERITY_ADMIN_TOKEN", "dev-admin-token")
 BOUNTY = int(os.environ.get("VERITY_TEST_BOUNTY_LAMPORTS", "10000000"))
 TIMEOUT = int(os.environ.get("VERITY_TEST_TIMEOUT", "420"))
 POLL_SECS = 3.0

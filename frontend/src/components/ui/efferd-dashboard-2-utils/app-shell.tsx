@@ -13,7 +13,8 @@ import {
   Sidebar,
   Home,
   LogOut,
-  User as UserIcon
+  User as UserIcon,
+  ShieldAlert
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -56,6 +57,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md">
                   <FolderGit2 className="mr-3 h-4 w-4 text-slate-400" />
                   Providers
+                </Button>
+              </Link>
+              <Link href="/admin">
+                <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md">
+                  <ShieldAlert className="mr-3 h-4 w-4 text-red-500" />
+                  Chaos & Admin
                 </Button>
               </Link>
             </div>
