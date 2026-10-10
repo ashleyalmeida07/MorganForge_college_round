@@ -1,0 +1,16 @@
+[toolchain]
+package_manager = "npm"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+verity_core = "ByADChPce9hwCuSak9hFwiiCyndYGj7dkYypm4XYEJL1"
+
+[programs.devnet]
+verity_core = "ByADChPce9hwCuSak9hFwiiCyndYGj7dkYypm4XYEJL1"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"
