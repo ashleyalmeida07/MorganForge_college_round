@@ -1,4 +1,5 @@
 """Application settings, loaded from environment / backend/.env."""
+import os
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -6,7 +7,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=(".env.local", ".env"), env_file_encoding="utf-8", extra="ignore"
+        # Later files win; real environment variables beat every file. VERITY_ENV_FILE points the
+        # scripts at another deployment's settings, e.g. VERITY_ENV_FILE=.env.production.
+        env_file=(".env.local", ".env", *filter(None, [os.getenv("VERITY_ENV_FILE")])),
+        env_file_encoding="utf-8",
+        extra="ignore",
     )
 
     # Solana
@@ -34,6 +39,8 @@ class Settings(BaseSettings):
 
     # App
     frontend_origin: str = "http://localhost:3000"
+    # Extra allowed origins by pattern (Vercel preview URLs change per deploy). Empty = exact list only.
+    frontend_origin_regex: str = r"https://([a-zA-Z0-9-]+\.)*vercel\.app"
     admin_emails: str = "support@arhamfintech.ai"
     # Optional shared secret accepted as an admin bearer token off-mainnet (local/E2E runs only). Leave empty in deployments.
     dev_admin_token: str = ""

@@ -33,6 +33,7 @@ from app.workers.common import (
     load_input,
     load_program_wasm,
     maybe_await,
+    owned_request_pdas,
     pick_other_program,
     record_error,
     run_in_thread,
@@ -127,8 +128,15 @@ async def provider_tick() -> dict[str, Any]:
                 continue
             candidates.append((True, r))
 
+    # Skip requests created through another deployment (their blobs are not in our storage).
+    seen = len(candidates)
+    if candidates:
+        owned = await run_in_thread(owned_request_pdas, [r["pda"] for _, r in candidates])
+        candidates = [c for c in candidates if c[1]["pda"] in owned]
+
     candidates.sort(key=lambda c: (int(c[1].get("deadline") or 0), c[0]))
-    stats = {"open": len(open_reqs), "resumable": len(claimed_reqs), "processed": 0, "submitted": 0}
+    stats = {"open": len(open_reqs), "resumable": len(claimed_reqs), "not_ours": seen - len(candidates),
+             "processed": 0, "submitted": 0}
     for needs_claim, req in candidates[:MAX_JOBS_PER_TICK]:
         pda = req["pda"]
         try:

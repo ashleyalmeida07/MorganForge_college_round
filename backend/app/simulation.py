@@ -19,10 +19,14 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
+import base58
+from solders.keypair import Keypair
+
 from app.chain import indexer, keys
 from app.chain.client import get_chain
+from app.chain.signer import input_commitment_message
 from app.config import settings
-from app.db import BUCKET_INPUTS, CHAOS_FLAGS, set_chaos_flag, table, upload_blob
+from app.db import BUCKET_INPUTS, CHAOS_FLAGS, set_chaos_flag, table, upload_blob, upsert
 from app.utils import canonical, explorer_addr, explorer_tx, sha256_hex, utcnow_iso
 
 logger = logging.getLogger("verity.simulation")
@@ -503,6 +507,9 @@ async def _run(sim: Sim, *, fast: bool, bounty: int) -> None:
                 bytes.fromhex(input_uri_hash),
                 bounty,
                 deadline,
+                before_send=lambda pda: asyncio.to_thread(
+                    _store_input_commitment, pda, requester, program_hash, input_hash, input_uri_hash
+                ),
             ),
             sim=sim,
             what="create_request",
@@ -677,6 +684,28 @@ async def _pick_payroll_program() -> tuple[dict[str, Any], dict[str, int]]:
     except (KeyError, TypeError, ValueError) as e:
         raise RuntimeError(f"payroll example_input is missing {e}") from e
     return program, payroll_input
+
+
+def _store_input_commitment(
+    request_pda: str, requester: Keypair, program_hash: str, input_hash: str, input_uri_hash: str
+) -> None:
+    """Sign and store the requester's input commitment, as /requests/commit-input does for wallets.
+
+    The provider refuses requests without one, so it must exist before `create_request` lands.
+    """
+    msg = input_commitment_message(bytes.fromhex(program_hash), bytes.fromhex(input_hash), bytes.fromhex(input_uri_hash))
+    upsert(
+        "input_commitments",
+        {
+            "request_pda": request_pda,
+            "requester_pubkey": str(requester.pubkey()),
+            "program_hash": program_hash,
+            "input_hash": input_hash,
+            "input_uri_hash": input_uri_hash,
+            "signature": base58.b58encode(bytes(requester.sign_message(msg))).decode(),
+        },
+        "request_pda",
+    )
 
 
 def db_program_by_hash(program_hash: str) -> dict[str, Any] | None:

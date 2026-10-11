@@ -19,7 +19,7 @@ import logging
 import re
 import struct
 import time
-from typing import Any, Iterable, Sequence
+from typing import Any, Awaitable, Callable, Iterable, Sequence
 
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Confirmed
@@ -1016,7 +1016,9 @@ class ChainClient:
         input_uri_hash: bytes,
         bounty: int,
         deadline: int,
+        before_send: Callable[[str], Awaitable[None]] | None = None,
     ) -> tuple[str, str]:
+        """`before_send(request_pda)` runs right before the tx is sent (e.g. to store the input commitment)."""
         args = (
             _fixed_bytes(program_hash, 32, "program_hash")
             + _fixed_bytes(input_hash, 32, "input_hash")
@@ -1035,6 +1037,8 @@ class ChainClient:
                 [_rw(config_pda()), _rw(req), _signer_rw(requester), _ro(SYSTEM_PROGRAM_ID)],
                 args,
             )
+            if before_send is not None:
+                await before_send(str(req))
             try:
                 sig = await self._send("create_request", [ix], requester_kp)
                 return sig, str(req)

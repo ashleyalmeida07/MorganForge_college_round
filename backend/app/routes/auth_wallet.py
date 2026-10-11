@@ -5,6 +5,7 @@ import asyncio
 import base64
 import binascii
 import logging
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -68,8 +69,12 @@ def _iso_z(dt: datetime) -> str:
 def resolve_origin(origin_header: str | None) -> str:
     """The frontend origin the message is bound to: the caller's Origin if it is an allowed CORS origin."""
     allowed = settings.cors_origins
-    if origin_header and origin_header.rstrip("/") in allowed:
-        return origin_header.rstrip("/")
+    origin = (origin_header or "").rstrip("/")
+    if origin and (
+        origin in allowed
+        or (settings.frontend_origin_regex and re.fullmatch(settings.frontend_origin_regex, origin))
+    ):
+        return origin
     if not allowed:
         raise HTTPException(500, "FRONTEND_ORIGIN is not configured")
     return allowed[0]

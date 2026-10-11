@@ -1,19 +1,26 @@
+# Render Blueprint for the Verity API (FastAPI + in-process provider/verifier/finalizer/indexer workers).
+# Render -> New -> Blueprint -> this repo. Step-by-step guide: DEPLOY.md.
+# Values marked `sync: false` are prompted for on first deploy; set them to the PRODUCTION Supabase project.
 services:
   - type: web
     name: verity-api
     runtime: python
     plan: free
+    region: singapore        # put the production Supabase project in the same region (ap-southeast-1)
     rootDir: backend
     buildCommand: pip install -r requirements.txt
+    # Exactly one worker: the background jobs run in-process (APScheduler) and must not run twice.
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
     healthCheckPath: /health
-    autoDeploy: true
+    autoDeployTrigger: commit
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
-      # --- Solana
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      # --- Solana (same devnet program as local; see programs/verity_core/DEPLOYMENT.md)
       - key: SOLANA_RPC_URL
-        value: https://api.devnet.solana.com   # or a Helius devnet URL
+        value: https://api.devnet.solana.com   # a Helius devnet URL rate-limits far less
       - key: PROGRAM_ID
         value: ByADChPce9hwCuSak9hFwiiCyndYGj7dkYypm4XYEJL1
       - key: ZK_PROGRAM_ID
@@ -26,28 +33,26 @@ services:
         sync: false
       - key: ADMIN_KEYPAIR_JSON           # config authority (falls back to provider)
         sync: false
-      # --- Supabase
+      - key: REQUESTER_KEYPAIR_JSON       # optional: funds /admin simulation-lab requests
+        sync: false
+      # --- Supabase: the PRODUCTION project (not the one in backend/.env)
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_ANON_KEY
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
-      - key: SUPABASE_JWT_SECRET
-        sync: false
-      - key: DATABASE_URL                 # only needed for scripts/apply_migration.py
+      - key: SUPABASE_JWT_SECRET          # legacy HS256 secret; JWKS (new signing keys) is used as a fallback
         sync: false
       # --- Pinata / IPFS (optional)
-      - key: PINATA_API_KEY
-        sync: false
-      - key: PINATA_API_SECRET
-        sync: false
       - key: PINATA_JWT
         sync: false
       - key: PINATA_GATEWAY
         sync: false
       # --- App
-      - key: FRONTEND_ORIGIN              # comma-separated list of allowed origins
+      - key: FRONTEND_ORIGIN              # comma-separated, e.g. https://verity.vercel.app
+        sync: false
+      - key: FRONTEND_ORIGIN_REGEX        # Vercel preview URLs, e.g. https://verity[a-z0-9-]*\.vercel\.app
         sync: false
       - key: ADMIN_EMAILS
         value: support@arhamfintech.ai

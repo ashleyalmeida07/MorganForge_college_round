@@ -19,6 +19,7 @@ from app.workers.common import (
     Backoff,
     load_input,
     load_program_wasm,
+    owned_request_pdas,
     record_error,
     run_in_thread,
     safe_append_event,
@@ -45,6 +46,10 @@ async def verifier_tick() -> dict[str, Any]:
     requests: list[dict] = []
     for status in ATTESTABLE_STATUSES:
         requests.extend(await chain.list_requests(status))
+    if requests:
+        # Only verify requests created through this deployment (their blobs are in our storage).
+        owned = await run_in_thread(owned_request_pdas, [r["pda"] for r in requests])
+        requests = [r for r in requests if r["pda"] in owned]
     if not requests:
         return {"requests": 0, "attested": 0}
     requests.sort(key=lambda r: int(r.get("receipt_at") or 0))

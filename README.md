@@ -30,6 +30,7 @@ supabase/                SQL migrations (schema, RLS, hash-chained audit log)
 scripts/                 deploy_program.sh|.py, seed_rulesets.py, verity_cli.py, apply_migrations.py
 .github/workflows/ci.yml CI: pytest + Postgres, next build, rule-set determinism, program tests on a local validator
 .env.example             every environment variable, grouped by where it is read
+render.yaml              Render blueprint for the backend (see DEPLOY.md)
 ```
 
 ## Run locally
@@ -39,6 +40,11 @@ scripts/                 deploy_program.sh|.py, seed_rulesets.py, verity_cli.py,
 2. Backend: follow [`backend/README.md`](backend/README.md) (env, Supabase migration, keypairs,
    chain bootstrap, rule-set seeding, `uvicorn app.main:app --reload`).
 3. Frontend: follow [`frontend/README.md`](frontend/README.md) (`npm install && npm run dev`).
+
+## Deploy
+
+Vercel (frontend) + Render (backend) + a separate production Supabase project, against the same
+devnet programs: step by step in [`DEPLOY.md`](DEPLOY.md) (`render.yaml`, `frontend/vercel.json`).
 
 ## Adversarial testing
 

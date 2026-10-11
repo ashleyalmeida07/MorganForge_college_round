@@ -13,3 +13,6 @@ __pycache__/
 st/*
 securiotemplate/*
 backend/keys/
+.env.*
+!.env.example
+!.env.*.example
