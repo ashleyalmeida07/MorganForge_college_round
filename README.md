@@ -20,13 +20,13 @@
 
 ---
 
-<video src="brag-output/brag.mp4" poster="brag-output/brag.jpg" controls="controls" width="100%" style="max-width: 800px; border-radius: 12px;">
+<p align="center">
   <a href="brag-output/brag.mp4">
-    <img src="brag-output/brag.jpg" alt="Watch Verity Demo Video" width="100%" style="max-width: 800px; border-radius: 12px;" />
+    <img src="brag-output/brag.jpg" alt="Verity Demo Preview — Click to watch video" width="850" style="max-width: 100%; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(0,0,0,0.08);" />
   </a>
-</video>
-<p>
-  <a href="brag-output/brag.mp4"><strong>▶ Watch the 21s Demo Video (MP4)</strong></a> — <em>"Don't trust the provider. Check the work."</em>
+</p>
+<p align="center">
+  <a href="brag-output/brag.mp4"><strong>▶ Click image above to play the 21s demo video (MP4)</strong></a> • <em>“Don’t trust the provider. Check the work.”</em>
 </p>
 
 ---
