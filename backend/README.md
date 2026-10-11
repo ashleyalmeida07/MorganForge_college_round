@@ -117,6 +117,8 @@ Never commit `.env` or `backend/keys/`.
 | `PINATA_API_KEY` / `PINATA_API_SECRET` | optional | Legacy Pinata key pair (used if no JWT) |
 | `PINATA_GATEWAY` | optional | Gateway host, e.g. `xyz.mypinata.cloud` (default `gateway.pinata.cloud`) |
 | `FRONTEND_ORIGIN` | yes | Comma-separated CORS origins (e.g. `http://localhost:3000,https://verity.vercel.app`) |
+| `FRONTEND_ORIGIN_REGEX` | no | Extra allowed origins by regex, for Vercel preview URLs (default: any `*.vercel.app`; empty = exact list only) |
+| `VERITY_ENV_FILE` | scripts | Shell-only: an extra env file read last, e.g. `.env.production` to target the deployed database |
 | `ADMIN_EMAILS` | yes | Comma-separated emails that get the admin role |
 | `DEV_ADMIN_TOKEN` | no | Local/E2E only: shared secret accepted as an admin bearer token off-mainnet. Leave unset on Render |
 | `WORKERS_ENABLED` | no | `true` (default) runs provider, verifier, finalizer and indexer jobs in-process |
@@ -271,17 +273,12 @@ python scripts/verity_cli.py evidence evidence.zip
 
 ## 6. Deploy on Render (free tier)
 
-1. In Render, go to New, then Blueprint, and select this repo. Set the
-   blueprint file path to `backend/render.yaml`. It defines one free web
-   service with `rootDir: backend` and Python 3.11.9:
-   - build command: `pip install -r requirements.txt`
-   - start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1`
-   - health check: `/health`
-2. Fill in every `sync: false` variable in the dashboard: the keypairs, the
-   Supabase keys, `FRONTEND_ORIGIN` (your Vercel URL) and the optional Pinata/AI keys.
-3. Keep exactly one uvicorn worker. The background jobs run in-process with
-   APScheduler, and Render's free tier has no separate worker service.
-4. The free tier sleeps after 15 minutes idle. To keep it awake, point
-   cron-job.org (or similar) at `GET /health` every 10 minutes.
-5. Add the Render URL to the frontend env as `NEXT_PUBLIC_API_URL`, and add
-   the Vercel domain to `FRONTEND_ORIGIN`.
+Full walkthrough (production Supabase project, Render, Vercel, keep-alive): [`../DEPLOY.md`](../DEPLOY.md).
+
+- Render → New → Blueprint → this repo. `render.yaml` at the repo root defines one free web service
+  (`rootDir: backend`, Python 3.11.9, one uvicorn worker, `/health` health check).
+- Keep exactly one uvicorn worker: the background jobs run in-process with APScheduler.
+- Point the setup scripts at the production database with `VERITY_ENV_FILE=.env.production`
+  (template: `.env.production.example`): `apply_migration.py`, then `seed_rulesets.py`.
+- Local and deployed backends can run at the same time against the same devnet program: each one
+  only claims and verifies requests whose input commitment is in its own database.

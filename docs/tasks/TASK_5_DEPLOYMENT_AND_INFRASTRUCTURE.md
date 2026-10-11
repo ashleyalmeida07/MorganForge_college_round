@@ -3,7 +3,7 @@
 > **Priority:** P1 (Required for Live Hackathon Submission)  
 > **Estimated Time:** 1–1.5 hours  
 > **Dependencies:** [TASK_1_SUPABASE_DATABASE_SETUP.md](./TASK_1_SUPABASE_DATABASE_SETUP.md), [TASK_2_WASM_RULESETS.md](./TASK_2_WASM_RULESETS.md), [TASK_3_FRONTEND_IMPLEMENTATION.md](./TASK_3_FRONTEND_IMPLEMENTATION.md), [TASK_4_ADVERSARIAL_DEMO_AND_ADMIN.md](./TASK_4_ADVERSARIAL_DEMO_AND_ADMIN.md)  
-> **Target Files:** [`backend/render.yaml`](file:///d:/Projects/verity/backend/render.yaml), [`frontend/`](file:///d:/Projects/verity/frontend)
+> **Superseded by [`DEPLOY.md`](../../DEPLOY.md).** **Target Files:** [`render.yaml`](../../render.yaml), [`frontend/`](file:///d:/Projects/verity/frontend)
 
 ---
 
@@ -19,11 +19,11 @@ To satisfy the hackathon judging criteria, Verity must run live on accessible pu
 
 ## 2. Step 1: Deploy Backend to Render (Free Tier)
 
-### 2.1 Using the Blueprint File (`backend/render.yaml`)
+### 2.1 Using the Blueprint File (`render.yaml`, repo root)
 1. Log in to your [Render Dashboard](https://dashboard.render.com/).
 2. Click **New** → **Blueprint**.
 3. Connect your GitHub repository.
-4. Set the **Blueprint Path** to `backend/render.yaml`.
+4. Render picks up `render.yaml` at the repo root automatically.
 5. Render will automatically parse the service configuration:
    * **Name:** `verity-api`
    * **Runtime:** Python 3.11.9

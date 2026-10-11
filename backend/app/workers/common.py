@@ -83,6 +83,25 @@ def load_input(input_hash_hex: str) -> bytes:
     return _as_bytes(download_blob(input_uri(input_hash_hex)))
 
 
+def owned_request_pdas(pdas: list[str]) -> set[str]:
+    """The requests created through this deployment: those with a requester input commitment in our DB.
+
+    Several backends (local + Render, each with its own database and storage) can serve the same
+    devnet program. Another deployment's request has its blobs in that deployment's storage, so
+    this one must neither claim nor verify it. The commitment row is written before
+    `create_request` is sent, so a request of ours is never missed.
+    """
+    owned: set[str] = set()
+    unique = list(dict.fromkeys(pdas))
+    for i in range(0, len(unique), 100):
+        rows = (
+            table("input_commitments").select("request_pda").in_("request_pda", unique[i : i + 100]).execute().data
+            or []
+        )
+        owned.update(r["request_pda"] for r in rows)
+    return owned
+
+
 def pick_other_program(exclude_hash_hex: str) -> str | None:
     """Return the hash of some registered program other than `exclude_hash_hex`."""
     try:

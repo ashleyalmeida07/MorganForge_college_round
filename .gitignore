@@ -12,3 +12,6 @@ __pycache__/
 .env
 securiotemplate/*
 backend/keys/
+.env.*
+!.env.example
+!.env.*.example

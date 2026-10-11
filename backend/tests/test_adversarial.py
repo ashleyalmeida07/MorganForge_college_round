@@ -137,17 +137,27 @@ class E2E:
         return r.json()
 
     def submit(self, title: str, inp: Any | None = None, deadline_secs: int = 600, confirm: bool = True) -> dict:
+        import base58
+
+        from app.chain.signer import input_commitment_message
         from app.utils import hex_to_bytes32
 
         inp = _perturb(self.base_input) if inp is None else inp
         prep = self.prepare(inp)
+        hashes = [hex_to_bytes32(prep[k]) for k in ("program_hash", "input_hash", "input_uri_hash")]
+
+        async def commit_input(pda: str) -> None:
+            # Same requester-signed commitment the create-job page stores; the provider refuses jobs without it.
+            sig = self.requester.sign_message(input_commitment_message(*hashes))
+            r = await asyncio.to_thread(self.api.post, "/requests/commit-input", json={
+                "request_pda": pda, "requester": str(self.requester.pubkey()),
+                "program_hash": prep["program_hash"], "input_hash": prep["input_hash"],
+                "input_uri_hash": prep["input_uri_hash"], "signature": base58.b58encode(bytes(sig)).decode(),
+            })
+            assert r.status_code < 400, f"/requests/commit-input: {r.status_code} {r.text}"
+
         sig, pda = self.run(self.chain.create_request(
-            self.requester,
-            hex_to_bytes32(prep["program_hash"]),
-            hex_to_bytes32(prep["input_hash"]),
-            hex_to_bytes32(prep["input_uri_hash"]),
-            BOUNTY,
-            int(time.time()) + deadline_secs,
+            self.requester, *hashes, BOUNTY, int(time.time()) + deadline_secs, before_send=commit_input,
         ))
         if confirm:
             r = self.api.post("/requests/confirm", json={"request_pda": pda, "tx_sig": sig, "title": f"[e2e] {title}"})

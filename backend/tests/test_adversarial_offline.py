@@ -55,9 +55,22 @@ class FakeChain:
         pda = str(Keypair().pubkey())
         req = {"pda": pda, "program_hash": program_hash, "input_hash": input_hash, "status": "Open",
                "provider": None, "attest_count_match": 0, "attest_count_mismatch": 0, "receipt_at": 0,
+               "deadline": int(time.time()) + 600,
                "input_uri_hash": sha256_hex(f"inputs/{input_hash}.json".encode())}
         self.requests[pda] = req
         return req
+
+    async def list_requests(self, status: str | None = None) -> list[dict[str, Any]]:
+        return [r for r in self.requests.values() if status is None or r["status"] == status]
+
+    async def get_config(self) -> dict[str, Any]:
+        return {"min_provider_stake": 0}
+
+    async def get_provider(self, owner: str) -> dict[str, Any]:
+        return {"owner": owner, "active": True, "stake": 1}
+
+    async def get_attestation(self, pda: str, verifier: str) -> dict[str, Any] | None:
+        return next((a for a in self.attestations.get(pda, []) if a["verifier"] == verifier), None)
 
     async def claim_request(self, kp: Keypair, pda: str) -> str:
         req = self.requests[pda]
@@ -188,7 +201,12 @@ class World:
         monkeypatch.setattr(provider, "set_receipt_output", lambda *a, **k: None)
         monkeypatch.setattr(provider, "pick_other_program", lambda exclude: self.other_hash)
         monkeypatch.setattr(provider, "db_input_commitment", lambda pda: self.commitments.get(pda))
+        for mod in (provider, verifier):
+            monkeypatch.setattr(mod, "owned_request_pdas", lambda pdas: {p for p in pdas if p in self.commitments})
         monkeypatch.setattr(keys, "verifier_keypairs", lambda: list(self.verifiers))
+        monkeypatch.setattr(keys, "provider_keypair", lambda: self.provider_kp)
+        for mod in (provider, verifier):
+            monkeypatch.setattr(mod, "get_chain", lambda: self.chain)
         import app.db as db
 
         monkeypatch.setattr(db, "table", no_db)
@@ -278,6 +296,28 @@ def test_01_malicious_provider_is_outvoted_and_disputed(world: World):
     assert d["challenger"] != world.chain.provider
     assert world.finalizer_disputed(req, window=10**9)["resolved"] == 1, "quorum support resolves immediately"
     assert d["status"] == "ChallengerWon" and req["status"] == "Rejected"
+
+
+def test_00b_requests_of_another_deployment_are_left_alone(world: World):
+    """Local + Render backends share one devnet program but not a database: each serves only its own jobs."""
+    from app.workers.provider import provider_tick
+    from app.workers.verifier import verifier_tick
+
+    ours = world.new_request()
+    theirs = world.chain.add_request(world.payroll_hash, ours["input_hash"])  # no commitment in our DB
+
+    stats = asyncio.run(provider_tick())
+    assert stats["submitted"] == 1 and stats["not_ours"] == 1
+    assert ours["status"] == "AwaitingVerification"
+    assert theirs["status"] == "Open" and theirs["provider"] is None, "never claim another deployment's job"
+
+    # Their provider receipted it; our verifiers must still not touch it.
+    theirs.update(status="AwaitingVerification", provider=world.chain.provider, receipt_at=1)
+    world.chain.receipts[theirs["pda"]] = dict(world.chain.receipts[ours["pda"]])
+    assert asyncio.run(verifier_tick())["attested"] == 3
+    assert len(world.chain.attestations[ours["pda"]]) == 3
+    assert theirs["pda"] not in world.chain.attestations, "never verify another deployment's job"
+    assert "InputCommitmentMissing" not in world.event_types()
 
 
 def test_02_swapped_program_never_matches(world: World):

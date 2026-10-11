@@ -1,0 +1,21 @@
+name: keepalive
+# Render's free tier sleeps after 15 min without traffic, which also stops the in-process
+# provider/verifier/finalizer workers. Ping /health every 10 minutes to keep it awake.
+# Set the repo variable RENDER_API_URL (Settings -> Secrets and variables -> Actions -> Variables),
+# e.g. https://verity-api.onrender.com. Without it this workflow does nothing.
+# GitHub may delay scheduled runs; cron-job.org on /health is a more punctual alternative.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    if: vars.RENDER_API_URL != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: GET /health (allows ~90 s for a cold start)
+        run: curl -fsS --retry 3 --retry-delay 10 --max-time 90 "${{ vars.RENDER_API_URL }}/health" | head -c 400
