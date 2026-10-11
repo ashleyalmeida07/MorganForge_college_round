@@ -4,8 +4,9 @@ Receipt message (must match `receipt_message` in programs/verity_core/src/lib.rs
     b"VERITY_RECEIPT_V1" || request_pda(32) || program_hash(32) || input_hash(32)
     || output_hash(32) || trace_root(32) || fuel_used(u64 LE)
 
-Input commitment message (requester-signed, off-chain only — see §4.4):
-    b"VERITY_INPUT_V1" || program_hash(32) || input_hash(32) || input_uri_hash(32)
+Input commitment message (requester-signed, off-chain only — see §4.4), UTF-8 text so wallets
+(Phantom) don't reject it as a disguised transaction:
+    "VERITY_INPUT_V2\nprogram_hash: <hex>\ninput_hash: <hex>\ninput_uri_hash: <hex>"
 """
 from __future__ import annotations
 
@@ -21,8 +22,7 @@ log = logging.getLogger(__name__)
 RECEIPT_DOMAIN = b"VERITY_RECEIPT_V1"
 RECEIPT_MESSAGE_LEN = len(RECEIPT_DOMAIN) + 32 * 5 + 8
 
-INPUT_DOMAIN = b"VERITY_INPUT_V1"
-INPUT_MESSAGE_LEN = len(INPUT_DOMAIN) + 32 * 3
+INPUT_DOMAIN = "VERITY_INPUT_V2"
 
 
 def _pubkey_bytes(value: str | bytes | Pubkey) -> bytes:
@@ -71,14 +71,12 @@ def receipt_message(
 
 def input_commitment_message(program_hash: bytes, input_hash: bytes, input_uri_hash: bytes) -> bytes:
     """Message a Requester's wallet signs to commit to an (program, input) pair before on-chain creation."""
-    return b"".join(
-        (
-            INPUT_DOMAIN,
-            _hash32(program_hash, "program_hash"),
-            _hash32(input_hash, "input_hash"),
-            _hash32(input_uri_hash, "input_uri_hash"),
-        )
-    )
+    return (
+        f"{INPUT_DOMAIN}\n"
+        f"program_hash: {_hash32(program_hash, 'program_hash').hex()}\n"
+        f"input_hash: {_hash32(input_hash, 'input_hash').hex()}\n"
+        f"input_uri_hash: {_hash32(input_uri_hash, 'input_uri_hash').hex()}"
+    ).encode()
 
 
 def sign_receipt(kp: Keypair, msg: bytes) -> bytes:

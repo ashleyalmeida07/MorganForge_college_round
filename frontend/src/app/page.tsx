@@ -101,9 +101,11 @@ function Nav() {
     <header className="sticky top-0 z-30 border-b border-blue-100/60 bg-white/75 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2.5 font-bold text-slate-900 group">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900 text-white shadow-sm transition-transform group-hover:scale-105">
-            <ShieldCheck className="h-4 w-4 text-blue-400" aria-hidden />
-          </div>
+          <img
+            src="/logo.svg"
+            alt="Verity Logo"
+            className="h-8 w-8 object-contain transition-transform group-hover:scale-105"
+          />
           <span className="text-base tracking-tight font-semibold">Verity</span>
         </Link>
         <nav className="hidden items-center gap-8 text-sm font-medium text-slate-600 md:flex">
@@ -300,24 +302,14 @@ function RecentActivity() {
 export default function LandingPage() {
   const programUrl = explorerAddress(env.programId);
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-[#ffffff] via-[#f4f7fe] to-[#dce8fe]/60 text-slate-900">
+    <div className="min-h-screen w-full bg-[#f8faff] text-slate-900">
       <Nav />
 
       <main>
-        <section className="relative overflow-hidden pt-12 pb-20 sm:pt-20 sm:pb-28">
-          {/* Ethereal light ambient glow matching the reference design */}
-          <div
-            className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_35%,rgba(191,219,254,0.45),rgba(255,255,255,0))]"
-            aria-hidden
-          />
-          <div
-            className="pointer-events-none absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-blue-100/50 via-sky-50/20 to-transparent"
-            aria-hidden
-          />
-
+        <section className="relative overflow-hidden pt-12 pb-20 sm:pt-20 sm:pb-24 bg-[linear-gradient(180deg,#edf2f9_0%,#ffffff_18%,#f6f8fc_40%,#dce8f8_60%,#bad3f6_74%,#94bcf4_86%,#76a3f0_100%)]">
           <div className="relative mx-auto max-w-5xl px-4 flex flex-col items-center text-center">
             {/* Top pill badge */}
-            <div className="inline-flex items-center gap-2 rounded-full border border-blue-200/70 bg-white/80 px-4 py-1.5 text-xs sm:text-sm font-medium text-slate-700 shadow-sm backdrop-blur-md">
+            <div className="inline-flex items-center gap-2 rounded-full border border-blue-200/70 bg-white/90 px-4 py-1.5 text-xs sm:text-sm font-medium text-slate-700 shadow-sm backdrop-blur-md">
               <span className="h-2 w-2 rounded-full bg-blue-600" />
               <span>Blockchain Verified on Solana</span>
             </div>
@@ -325,12 +317,12 @@ export default function LandingPage() {
             {/* Headline with glowing gradient accents */}
             <h1 className="mt-8 text-5xl sm:text-7xl md:text-8xl font-normal tracking-tight text-slate-900 leading-[1.08] max-w-4xl">
               Prove{" "}
-              <span className="font-normal bg-gradient-to-r from-blue-600 via-sky-500 to-blue-500 bg-clip-text text-transparent">
+              <span className="font-normal animate-shimmer-blue">
                 computation
               </span>
               <br />
               without the{" "}
-              <span className="font-normal bg-gradient-to-r from-blue-600 via-sky-500 to-blue-500 bg-clip-text text-transparent">
+              <span className="font-normal animate-shimmer-blue">
                 risk.
               </span>
             </h1>
@@ -340,21 +332,21 @@ export default function LandingPage() {
               Execute deterministic workloads anchored on the Solana blockchain. If it&apos;s verified, settle instantly with cryptographic finality. If it&apos;s tampered, the chain catches and slashes it.
             </p>
 
-            {/* The 4 Feature Pills matching the reference */}
+            {/* The 4 Feature Pills in the blue zone */}
             <div className="mt-10 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
-              <div className="inline-flex items-center gap-2.5 rounded-xl border border-blue-100/90 bg-white/90 px-4 py-2.5 sm:px-5 sm:py-3 text-xs sm:text-sm font-medium text-slate-700 shadow-sm backdrop-blur">
+              <div className="inline-flex items-center gap-2.5 rounded-xl border border-white/80 bg-white px-4 py-2.5 sm:px-5 sm:py-3 text-xs sm:text-sm font-medium text-slate-800 shadow-md shadow-blue-900/10">
                 <ShieldCheck className="h-4 w-4 text-blue-600" aria-hidden />
                 <span>Tamper-Proof Execution</span>
               </div>
-              <div className="inline-flex items-center gap-2.5 rounded-xl border border-blue-100/90 bg-white/90 px-4 py-2.5 sm:px-5 sm:py-3 text-xs sm:text-sm font-medium text-slate-700 shadow-sm backdrop-blur">
+              <div className="inline-flex items-center gap-2.5 rounded-xl border border-white/80 bg-white px-4 py-2.5 sm:px-5 sm:py-3 text-xs sm:text-sm font-medium text-slate-800 shadow-md shadow-blue-900/10">
                 <Zap className="h-4 w-4 text-blue-600" aria-hidden />
                 <span>Solana Secured</span>
               </div>
-              <div className="inline-flex items-center gap-2.5 rounded-xl border border-blue-100/90 bg-white/90 px-4 py-2.5 sm:px-5 sm:py-3 text-xs sm:text-sm font-medium text-slate-700 shadow-sm backdrop-blur">
+              <div className="inline-flex items-center gap-2.5 rounded-xl border border-white/80 bg-white px-4 py-2.5 sm:px-5 sm:py-3 text-xs sm:text-sm font-medium text-slate-800 shadow-md shadow-blue-900/10">
                 <CheckCircle2 className="h-4 w-4 text-blue-600" aria-hidden />
                 <span>Instantly Verifiable</span>
               </div>
-              <div className="inline-flex items-center gap-2.5 rounded-xl border border-blue-100/90 bg-white/90 px-4 py-2.5 sm:px-5 sm:py-3 text-xs sm:text-sm font-medium text-slate-700 shadow-sm backdrop-blur">
+              <div className="inline-flex items-center gap-2.5 rounded-xl border border-white/80 bg-white px-4 py-2.5 sm:px-5 sm:py-3 text-xs sm:text-sm font-medium text-slate-800 shadow-md shadow-blue-900/10">
                 <Database className="h-4 w-4 text-blue-600" aria-hidden />
                 <span>Permanent Record</span>
               </div>
@@ -364,23 +356,23 @@ export default function LandingPage() {
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3.5">
               <Link
                 href="/create-job"
-                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-md shadow-blue-500/25 hover:bg-blue-500 hover:shadow-lg transition-all"
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-950/25 hover:bg-blue-500 hover:shadow-xl transition-all"
               >
                 Submit a computation <ArrowRight className="h-4 w-4" aria-hidden />
               </Link>
               <Link
                 href="/activity"
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white/90 px-6 py-3 text-sm font-semibold text-slate-800 shadow-sm hover:bg-white hover:border-slate-300 transition-all backdrop-blur"
+                className="inline-flex items-center gap-2 rounded-xl border border-white/90 bg-white/95 px-6 py-3 text-sm font-semibold text-slate-800 shadow-md hover:bg-white transition-all backdrop-blur"
               >
                 Browse verified results
               </Link>
             </div>
-
-            {/* Live Stats Card */}
-            <div className="mt-14 w-full max-w-4xl">
-              <LiveStats />
-            </div>
           </div>
+        </section>
+
+        {/* Live Stats Section floating over bottom of hero */}
+        <section className="relative z-10 -mt-10 mx-auto max-w-5xl px-4 mb-16">
+          <LiveStats />
         </section>
 
         <section id="how" className="scroll-mt-16 border-y border-slate-200/80 bg-white/70 backdrop-blur-sm">

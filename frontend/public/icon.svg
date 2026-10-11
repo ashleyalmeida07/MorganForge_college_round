@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <defs>
+    <linearGradient id="logoBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5" />
+      <stop offset="50%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+    <filter id="logoGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#2563eb" flood-opacity="0.2" />
+    </filter>
+  </defs>
+  <!-- Card Background with Gradient Border -->
+  <rect x="2.5" y="2.5" width="43" height="43" rx="12" fill="#ffffff" stroke="url(#logoBorder)" stroke-width="2.5" filter="url(#logoGlow)" />
+  <!-- Shield with checkmark -->
+  <path d="M24 12L31.5 15.5V23C31.5 28.5 28.2 33.6 24 35C19.8 33.6 16.5 28.5 16.5 23V15.5L24 12Z" stroke="#2563eb" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M21 23.5L23 25.5L27.5 21" stroke="#2563eb" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+</svg>

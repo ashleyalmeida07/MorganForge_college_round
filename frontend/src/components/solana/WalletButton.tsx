@@ -103,16 +103,39 @@ export function WalletButton() {
               <div className="px-2 py-1.5 text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">
                 Select Solana Wallet
               </div>
-              {detected.length === 0 && (
-                <p className="px-2 py-2 text-xs text-slate-500 leading-relaxed">
-                  No Solana wallet detected. Install{" "}
-                  <a href="https://phantom.app" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
-                    Phantom
-                  </a>{" "}
-                  and toggle to Devnet mode.
+          {detected.length === 0 ? (
+              <>
+                <p className="px-2 py-1.5 text-[10px] text-slate-400 leading-relaxed">
+                  No Solana wallet detected. Install one below:
                 </p>
-              )}
-              {detected.map((w) => (
+                {[
+                  {
+                    name: "Phantom",
+                    url: "https://phantom.app",
+                    icon: "https://raw.githubusercontent.com/phantom-labs/phantom-brand/refs/heads/main/icon-512.png",
+                  },
+                  {
+                    name: "Solflare",
+                    url: "https://solflare.com",
+                    icon: "https://raw.githubusercontent.com/solflare-wallet/solflare-brand/refs/heads/main/icon.png",
+                  },
+                ].map((w) => (
+                  <a
+                    key={w.name}
+                    href={w.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-slate-700 hover:bg-slate-100 transition-colors"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={w.icon} alt="" className="h-4 w-4 rounded-sm" />
+                    <span className="font-medium text-slate-900 flex-1">{w.name}</span>
+                    <span className="text-[10px] font-mono text-slate-400 bg-slate-100 rounded px-1.5 py-0.5">Install</span>
+                  </a>
+                ))}
+              </>
+            ) : (
+              detected.map((w) => (
                 <button
                   key={w.adapter.name}
                   onClick={() => {
@@ -125,7 +148,8 @@ export function WalletButton() {
                   <img src={w.adapter.icon} alt="" className="h-4 w-4" />
                   <span className="font-medium text-slate-900">{w.adapter.name}</span>
                 </button>
-              ))}
+              ))
+            )}
             </>
           ) : (
             <>
