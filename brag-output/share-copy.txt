@@ -1,0 +1,2 @@
+Verity: hand your computation to a stranger, re-run it in your browser, and if they lied, Solana slashes their stake.
+Don't trust the provider. Check the work.
