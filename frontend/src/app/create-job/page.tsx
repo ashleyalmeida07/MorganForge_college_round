@@ -28,12 +28,10 @@ import { AppShell } from '@/components/ui/efferd-dashboard-2-utils/app-shell';
 
 import { useApi } from '@/lib/hooks';
 import { apiPost, ApiError, type PrepareOut, type Program } from '@/lib/api';
-import { canonicalJson, concatBytes, fromHex, sha256Hex, toBase64 } from '@/lib/hash';
+import { canonicalJson, sha256Hex, toBase64 } from '@/lib/hash';
 import { createRequest, predictRequestPda, LAMPORTS_PER_SOL, useVerityProgram } from '@/lib/solana';
 import { shortKey } from '@/lib/utils';
 import { explorerAddress, explorerTx } from '@/lib/env';
-
-const INPUT_COMMITMENT_DOMAIN = new TextEncoder().encode('VERITY_INPUT_V1');
 
 const SELECT_CLASS =
   'w-full appearance-none rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-mono';
@@ -235,11 +233,15 @@ function CreateJobForm() {
       const { request: predictedPda } = await predictRequestPda(verity);
 
       setStep('Sign input commitment in Phantom/wallet…');
-      const commitmentMsg = concatBytes(
-        INPUT_COMMITMENT_DOMAIN,
-        fromHex(prep.program_hash),
-        fromHex(prep.input_hash),
-        fromHex(prep.input_uri_hash),
+      // Printable text: wallets (Phantom) refuse signMessage on bytes that parse as a transaction.
+      // Must match `input_commitment_message` in backend/app/chain/signer.py.
+      const commitmentMsg = new TextEncoder().encode(
+        [
+          'VERITY_INPUT_V2',
+          `program_hash: ${normHex(prep.program_hash)}`,
+          `input_hash: ${normHex(prep.input_hash)}`,
+          `input_uri_hash: ${normHex(prep.input_uri_hash)}`,
+        ].join('\n'),
       );
       const commitmentSig = await signMessage(commitmentMsg);
       await apiPost('/requests/commit-input', {
