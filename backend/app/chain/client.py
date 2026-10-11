@@ -598,6 +598,8 @@ class ChainClient:
         self.rpc_url = rpc_url
         self.program_id = to_pubkey(program_id)
         self._rpc: AsyncClient | None = None
+        self._requests_cache: tuple[float, list[dict[str, Any]]] | None = None
+        self._requests_inflight: asyncio.Task | None = None
 
     # PDA helpers (also available as module-level functions)
     config_pda = staticmethod(config_pda)
@@ -700,14 +702,31 @@ class ChainClient:
         rows.sort(key=lambda a: (a["attested_at"], a["verifier"]))
         return rows
 
+    async def _all_requests(self) -> list[dict[str, Any]]:
+        """Every Request account, shared by all callers for `request_cache_secs`.
+
+        The workers ask for 2-5 statuses each tick; one getProgramAccounts per status per job is
+        ~50 calls a minute, which public devnet RPCs answer with 429. Concurrent callers share one
+        in-flight fetch.
+        """
+        ttl = float(settings.request_cache_secs)
+        cached = self._requests_cache
+        if cached is not None and time.monotonic() - cached[0] < ttl:
+            return cached[1]
+        loop = asyncio.get_running_loop()
+        task = self._requests_inflight
+        if task is None or task.done() or task.get_loop() is not loop:
+            task = loop.create_task(self._program_accounts("Request"))
+            self._requests_inflight = task
+        rows = await task
+        if ttl > 0:
+            self._requests_cache = (time.monotonic(), rows)
+        return rows
+
     async def list_requests(self, status: str | None = None) -> list[dict[str, Any]]:
-        extra: list[MemcmpOpts] = []
-        if status is not None:
-            if status not in REQUEST_STATUSES:
-                raise ValueError(f"unknown request status {status!r}")
-            idx = REQUEST_STATUSES.index(status)
-            extra.append(MemcmpOpts(offset=REQUEST_STATUS_OFFSET, bytes=b58encode(bytes([idx]))))
-        rows = await self._program_accounts("Request", extra)
+        if status is not None and status not in REQUEST_STATUSES:
+            raise ValueError(f"unknown request status {status!r}")
+        rows = [dict(r) for r in await self._all_requests() if status is None or r.get("status") == status]
         rows.sort(key=lambda r: (r["created_at"], r["id"]))
         return rows
 
