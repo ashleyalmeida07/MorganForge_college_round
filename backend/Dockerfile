@@ -1,5 +1,6 @@
 # Verity API (FastAPI + in-process provider/verifier/finalizer/indexer workers).
-# Build context: backend/   ->   docker build -t verity-api backend
+# Build context: the REPO ROOT (Render's default)   ->   docker build -f backend/Dockerfile .
+# The root .dockerignore sends only backend/app, backend/scripts and backend/requirements.txt.
 # Config comes from environment variables only (Render dashboard); no .env file is baked in.
 FROM python:3.11.9-slim
 
@@ -10,11 +11,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install -r requirements.txt
 
-COPY app ./app
-COPY scripts ./scripts
+COPY backend/app ./app
+COPY backend/scripts ./scripts
 
 RUN useradd --create-home --uid 10001 verity && chown -R verity /app
 USER verity

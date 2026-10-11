@@ -57,7 +57,8 @@ Do the steps in order. Each one needs URLs or keys from the step before it.
 ## 2. Backend on Render (Docker)
 
 The API runs from `backend/Dockerfile`. CI job `backend-docker` builds it and checks `/health` on
-every push. The image holds no `.env` files or keys (`backend/.dockerignore`): all config comes
+every push. It builds from the repo root; the root `.dockerignore` sends only the backend code, so
+the image holds no `.env` files or keys: all config comes
 from Render's environment variables.
 
 **Option A, Blueprint (recommended):** Render → **New → Blueprint** → pick the repo. Render reads
@@ -72,7 +73,7 @@ from Render's environment variables.
 | Region | Singapore |
 | Root Directory | *leave empty* |
 | Dockerfile Path | `./backend/Dockerfile` |
-| Docker Build Context Directory (Advanced) | `./backend` |
+| Docker Build Context Directory (Advanced) | `.` (the default: the repo root) |
 | Docker Command | *leave empty* (the Dockerfile's `CMD` is used) |
 | Health Check Path (Advanced) | `/health` |
 | Build Filters → Included paths (Advanced) | `backend/**` |

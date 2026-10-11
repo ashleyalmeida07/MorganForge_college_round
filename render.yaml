@@ -7,10 +7,10 @@ services:
     runtime: docker
     plan: free
     region: singapore        # nearest Render region to the Supabase project (ap-northeast-2)
-    # backend/Dockerfile runs one uvicorn worker on $PORT. Paths are from the repo root and no
-    # rootDir is set, so they mean the same thing under either of Render's path conventions.
+    # backend/Dockerfile runs one uvicorn worker on $PORT. It builds from the repo root (Render's
+    # default context); the root .dockerignore limits the context to the backend files.
     dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
+    dockerContext: .
     buildFilter:
       paths: ["backend/**"]   # frontend-only commits don't redeploy the API
     healthCheckPath: /health
