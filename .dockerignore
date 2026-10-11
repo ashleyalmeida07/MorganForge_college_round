@@ -1,0 +1,10 @@
+# Docker build context = repo root (Render's default). Send only what backend/Dockerfile copies:
+# no .env files, keys, venvs or the frontend/programs trees.
+*
+!backend/requirements.txt
+!backend/app/
+!backend/scripts/
+**/__pycache__/
+**/*.pyc
+**/.env
+**/.env.*
