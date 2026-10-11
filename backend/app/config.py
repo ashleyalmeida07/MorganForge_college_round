@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     verifier_interval_secs: int = 8
     finalizer_interval_secs: int = 15
     indexer_interval_secs: int = 10
+    # Workers share one cached getProgramAccounts(Request) for this long (public RPCs rate-limit it).
+    request_cache_secs: float = 6.0
     audit_anchor_every: int = 20
     fuel_limit: int = 50_000_000
     groq_api_key: str = ""
