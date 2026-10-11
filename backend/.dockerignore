@@ -1,0 +1,16 @@
+# Secrets must never end up in the image: config comes from the host's environment variables.
+.env
+.env.*
+keys/
+
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+tests/
+verity-cli
+verity-cli.cmd
+README.md
+Dockerfile
+.dockerignore

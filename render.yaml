@@ -4,20 +4,18 @@
 services:
   - type: web
     name: verity-api
-    runtime: python
+    runtime: docker
     plan: free
-    region: singapore        # put the production Supabase project in the same region (ap-southeast-1)
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    # Exactly one worker: the background jobs run in-process (APScheduler) and must not run twice.
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+    region: singapore        # nearest Render region to the Supabase project (ap-northeast-2)
+    # backend/Dockerfile runs one uvicorn worker on $PORT. Paths are from the repo root and no
+    # rootDir is set, so they mean the same thing under either of Render's path conventions.
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    buildFilter:
+      paths: ["backend/**"]   # frontend-only commits don't redeploy the API
     healthCheckPath: /health
     autoDeployTrigger: commit
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.9
-      - key: PYTHONUNBUFFERED
-        value: "1"
       # --- Solana (same devnet program as local; see programs/verity_core/DEPLOYMENT.md)
       - key: SOLANA_RPC_URL
         value: https://api.devnet.solana.com   # a Helius devnet URL rate-limits far less

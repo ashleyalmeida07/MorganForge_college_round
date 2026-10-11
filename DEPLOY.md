@@ -3,7 +3,7 @@
 | Piece | Where | Config file |
 |---|---|---|
 | Next.js frontend | Vercel (Hobby), root directory `frontend` | `frontend/vercel.json` |
-| FastAPI API + workers | Render (free web service), root directory `backend` | `render.yaml` (repo root) |
+| FastAPI API + workers | Render (free web service, Docker) | `render.yaml` (repo root), `backend/Dockerfile` |
 | Postgres, Auth, Storage, Realtime | a **separate production** Supabase project | `supabase/migrations/*.sql` |
 | `verity_core` + `verity_zk_verifier` | Solana devnet, already deployed | `programs/verity_core/DEPLOYMENT.md` |
 
@@ -18,7 +18,7 @@ Do the steps in order. Each one needs URLs or keys from the step before it.
 ## 1. Production Supabase project
 
 1. Create a new project at supabase.com. Pick the region **Southeast Asia (Singapore)** so it is
-   close to the Render service (`region: singapore` in `render.yaml`).
+   close to the Render service (`region: singapore` in `render.yaml`; Seoul works too).
 2. **Keys.** Project Settings → API Keys → *Legacy API keys*: copy the `anon` and
    `service_role` keys. Project Settings → JWT Keys: copy the *Legacy JWT secret*. The backend
    also accepts the new asymmetric signing keys via JWKS, so the secret is only a fast path.
@@ -54,26 +54,48 @@ Do the steps in order. Each one needs URLs or keys from the step before it.
      *Authorized redirect URIs*, next to the dev project's callback.
    - Authentication → URL Configuration: set this after step 3, once you have the Vercel URL.
 
-## 2. Backend on Render
+## 2. Backend on Render (Docker)
 
-1. Render → **New → Blueprint** → pick this repo. Render reads `render.yaml` and creates the free
-   web service `verity-api` (`rootDir: backend`, Python 3.11.9, one uvicorn worker, `/health`
-   health check, auto-deploy on every commit to `main`).
-2. Fill in the prompted (`sync: false`) values:
+The API runs from `backend/Dockerfile`. CI job `backend-docker` builds it and checks `/health` on
+every push. The image holds no `.env` files or keys (`backend/.dockerignore`): all config comes
+from Render's environment variables.
 
-   | Variable | Value |
-   |---|---|
-   | `PROVIDER_KEYPAIR_JSON`, `VERIFIER_KEYPAIRS_JSON`, `ADMIN_KEYPAIR_JSON` | the same values as in `backend/.env` (JSON arrays paste as-is) |
-   | `REQUESTER_KEYPAIR_JSON` | optional; a funded devnet key for the `/admin` simulation lab |
-   | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET` | the **production** project (step 1) |
-   | `FRONTEND_ORIGIN` | for now `http://localhost:3000`; change it to the Vercel URL in step 3 |
-   | `FRONTEND_ORIGIN_REGEX` | `https://verity[a-z0-9-]*\.vercel\.app` (your project's preview URLs), or empty |
-   | `PINATA_JWT`, `PINATA_GATEWAY`, `GROQ_API_KEY`, `ANTHROPIC_API_KEY` | optional, or leave empty |
+**Option A, Blueprint (recommended):** Render → **New → Blueprint** → pick the repo. Render reads
+`render.yaml` and prompts for every `sync: false` value.
 
-   Leave `DEV_ADMIN_TOKEN` unset on Render.
-3. When the deploy is live, open `https://<service>.onrender.com/health` (`"ok": true`,
-   `workers_enabled: true`) and `/config`, which should list the provider and 3 verifier pubkeys.
-   The first build takes a few minutes; later cold starts take about 30–60 s.
+**Option B, manual:** Render → **New → Web Service** → pick the repo, then:
+
+| Field | Value |
+|---|---|
+| Language | **Docker** |
+| Branch | `main` |
+| Region | Singapore |
+| Root Directory | *leave empty* |
+| Dockerfile Path | `./backend/Dockerfile` |
+| Docker Build Context Directory (Advanced) | `./backend` |
+| Docker Command | *leave empty* (the Dockerfile's `CMD` is used) |
+| Health Check Path (Advanced) | `/health` |
+| Build Filters → Included paths (Advanced) | `backend/**` |
+| Instance Type | **Free** |
+
+Environment variables: under **Environment Variables → Add from .env**, paste the contents of
+`backend/.env.production`:
+
+| Variable | Value |
+|---|---|
+| `PROVIDER_KEYPAIR_JSON`, `VERIFIER_KEYPAIRS_JSON`, `ADMIN_KEYPAIR_JSON` | the same values as in `backend/.env` (JSON arrays paste as-is) |
+| `REQUESTER_KEYPAIR_JSON` | optional; a funded devnet key for the `/admin` simulation lab |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET` | the **production** project (step 1) |
+| `FRONTEND_ORIGIN` | for now `http://localhost:3000`; change it to the Vercel URL in step 3 |
+| `FRONTEND_ORIGIN_REGEX` | `https://verity[a-z0-9-]*\.vercel\.app` (your project's preview URLs), or empty |
+| `PINATA_JWT`, `PINATA_GATEWAY`, `GROQ_API_KEY`, `ANTHROPIC_API_KEY` | optional, or leave empty |
+
+`DATABASE_URL` is only used by the setup scripts and is harmless on Render. Leave
+`DEV_ADMIN_TOKEN` empty.
+
+When the deploy is live, open `https://<service>.onrender.com/health` (`"ok": true`,
+`workers_enabled: true`) and `/config`, which should list the provider and 3 verifier pubkeys.
+The first build takes a few minutes; later cold starts take about 30–60 s.
 
 ## 3. Frontend on Vercel
 
