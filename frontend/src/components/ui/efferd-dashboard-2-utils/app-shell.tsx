@@ -1,167 +1,337 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   LayoutDashboard,
-  BarChart,
-  FolderGit2,
-  Users,
-  HelpCircle,
-  BookOpen,
-  Send,
-  Bell,
-  Sidebar,
+  PlayCircle,
+  Cpu,
+  Activity,
+  Boxes,
+  ShieldAlert,
   Home,
   LogOut,
-  User as UserIcon,
-  ShieldAlert,
-  Activity,
-  Boxes
+  ExternalLink,
+  Copy,
+  Check,
+  ShieldCheck,
+  Terminal,
+  BookOpen,
+  ChevronRight,
+  Menu,
+  X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { WalletButton } from '@/components/solana/WalletButton';
+import { env, explorerAddress } from '@/lib/env';
+import { shortKey } from '@/lib/utils';
 
 const NAV = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/create-job', label: 'Create Job', icon: BarChart },
-  { href: '/provider', label: 'Providers', icon: FolderGit2 },
-  { href: '/activity', label: 'Activity', icon: Activity },
-  { href: '/rulesets', label: 'Rule Sets', icon: Boxes },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, badge: null },
+  { href: '/create-job', label: 'Create Job', icon: PlayCircle, badge: 'New' },
+  { href: '/rulesets', label: 'Rule Sets', icon: Boxes, badge: '6 WASM' },
+  { href: '/provider', label: 'Providers', icon: Cpu, badge: 'Staking' },
+  { href: '/activity', label: 'Activity Feed', icon: Activity, badge: 'Live' },
+  { href: '/admin', label: 'Chaos & Admin', icon: ShieldAlert, badge: 'Testing', danger: true },
 ];
-
-const ACTIVE = 'w-full justify-start h-9 px-3 text-sm bg-slate-100 text-slate-900 font-medium rounded-md hover:bg-slate-200';
-const IDLE = 'w-full justify-start h-9 px-3 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, displayName, avatarUrl, signOut } = useAuth();
   const pathname = usePathname();
+  const [copiedProgram, setCopiedProgram] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const copyProgramId = () => {
+    navigator.clipboard.writeText(env.programId);
+    setCopiedProgram(true);
+    setTimeout(() => setCopiedProgram(false), 2000);
+  };
+
+  const getPageTitle = () => {
+    if (pathname === '/dashboard') return 'Overview & Analytics';
+    if (pathname === '/create-job') return 'Dispatch Computation';
+    if (pathname === '/rulesets') return 'Rule Set Marketplace';
+    if (pathname === '/rulesets/new') return 'Register a Rule Set';
+    if (pathname === '/provider') return 'Provider Node Operations';
+    if (pathname === '/activity') return 'Immutable Event Stream';
+    if (pathname === '/admin') return 'Adversarial Chaos Theater';
+    if (pathname.startsWith('/requests/')) return 'Execution Audit';
+    if (pathname.startsWith('/verify/')) return 'Public Zero-Trust Verification';
+    return 'Computation Portal';
+  };
+
   return (
-    <div className="flex h-screen w-full bg-slate-50 text-slate-900 overflow-hidden font-sans">
-      <div className="w-[240px] border-r border-slate-200 bg-white flex flex-col h-full hidden md:flex shrink-0">
-        <div className="h-14 flex items-center gap-2 px-4 border-b border-slate-200">
-          <div className="w-6 h-6 flex items-center justify-center bg-blue-600 rounded-md text-white">
-            <Sidebar className="w-3.5 h-3.5" />
-          </div>
-          <span className="font-semibold text-sm">Verity App</span>
+    <div className="flex h-screen w-full bg-[#F8FAFC] text-slate-900 overflow-hidden font-sans selection:bg-blue-600/20 selection:text-blue-900">
+      {/* Sidebar Desktop (White Theme) */}
+      <aside className="w-[270px] border-r border-slate-200/90 bg-white flex flex-col h-full hidden md:flex shrink-0 z-30 shadow-xs">
+        {/* Brand Header */}
+        <div className="h-16 flex items-center justify-between px-5 border-b border-slate-200/90 bg-white">
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 via-indigo-600 to-cyan-500 p-[1px] shadow-sm shadow-blue-500/20 group-hover:shadow-blue-500/30 transition-shadow">
+              <div className="w-full h-full bg-white rounded-[7px] flex items-center justify-center">
+                <ShieldCheck className="w-4 h-4 text-blue-600 group-hover:scale-110 transition-transform" />
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-extrabold text-sm tracking-wider text-slate-900">
+                  VERITY
+                </span>
+                <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                  DEVNET
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-500 font-mono tracking-tight -mt-0.5">
+                Verifiable Computation
+              </p>
+            </div>
+          </Link>
         </div>
-        <div className="flex-1 overflow-y-auto py-4 space-y-6 scrollbar-hide">
-          <div>
-            <div className="text-xs font-semibold text-slate-500 mb-2 px-4 uppercase tracking-wider">Menu</div>
-            <div className="space-y-1 px-3">
-              {/* Full page load: the landing page boots Webflow/GSAP scripts. */}
-              {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-              <a href="/">
-                <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md">
-                  <Home className="mr-3 h-4 w-4 text-slate-400" />
-                  Home Page
-                </Button>
+
+        {/* Network & Program Bar */}
+        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/70 space-y-2">
+          <div className="flex items-center justify-between text-[11px] font-mono">
+            <span className="flex items-center gap-1.5 text-slate-600">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              Solana Cluster
+            </span>
+            <span className="text-emerald-700 font-semibold font-mono">Devnet (Synced)</span>
+          </div>
+
+          <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-[10px] font-mono text-slate-600 shadow-xs">
+            <span className="truncate max-w-[150px] font-semibold text-slate-800" title={env.programId}>
+              ID: {shortKey(env.programId, 6)}
+            </span>
+            <div className="flex items-center gap-1 text-slate-500">
+              <button
+                type="button"
+                onClick={copyProgramId}
+                className="hover:text-blue-600 transition-colors p-0.5"
+                title="Copy Program ID"
+              >
+                {copiedProgram ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+              </button>
+              <a
+                href={explorerAddress(env.programId) ?? "#"}
+                target="_blank"
+                rel="noreferrer"
+                className="hover:text-blue-600 transition-colors p-0.5"
+                title="View on Solana Explorer"
+              >
+                <ExternalLink className="w-3 h-3" />
               </a>
-              {NAV.map(({ href, label, icon: Icon }) => {
-                const active = pathname === href || pathname.startsWith(`${href}/`);
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation Menu */}
+        <div className="flex-1 overflow-y-auto py-4 px-3 space-y-6 scrollbar-thin">
+          <div>
+            <div className="text-[10px] font-mono font-bold text-slate-400 mb-2 px-3 uppercase tracking-wider">
+              Core Platform
+            </div>
+            <div className="space-y-1">
+              {NAV.map(({ href, label, icon: Icon, badge, danger }) => {
+                const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(`${href}/`));
                 return (
                   <Link key={href} href={href}>
-                    <Button variant="ghost" className={active ? ACTIVE : IDLE}>
-                      <Icon className={`mr-3 h-4 w-4 ${active ? 'text-slate-500' : 'text-slate-400'}`} />
-                      {label}
-                    </Button>
+                    <div
+                      className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all group ${
+                        active
+                          ? danger
+                            ? 'bg-rose-50 text-rose-700 border border-rose-200 font-semibold shadow-xs'
+                            : 'bg-blue-50 text-blue-700 border border-blue-200 font-semibold shadow-xs'
+                          : danger
+                          ? 'text-slate-600 hover:text-rose-600 hover:bg-rose-50/50'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Icon
+                          className={`w-4 h-4 transition-colors ${
+                            active
+                              ? danger
+                                ? 'text-rose-600'
+                                : 'text-blue-600'
+                              : danger
+                              ? 'text-rose-500 group-hover:text-rose-600'
+                              : 'text-slate-400 group-hover:text-slate-700'
+                          }`}
+                        />
+                        <span>{label}</span>
+                      </div>
+                      {badge && (
+                        <span
+                          className={`text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded ${
+                            active
+                              ? danger
+                                ? 'bg-rose-100 text-rose-800'
+                                : 'bg-blue-100 text-blue-800'
+                              : danger
+                              ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                              : 'bg-slate-100 text-slate-600 border border-slate-200'
+                          }`}
+                        >
+                          {badge}
+                        </span>
+                      )}
+                    </div>
                   </Link>
                 );
               })}
-              <Link href="/admin">
-                <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md">
-                  <ShieldAlert className="mr-3 h-4 w-4 text-red-500" />
-                  Chaos & Admin
-                </Button>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[10px] font-mono font-bold text-slate-400 mb-2 px-3 uppercase tracking-wider">
+              External & Resources
+            </div>
+            <div className="space-y-1">
+              <Link
+                href="/"
+                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 transition-all"
+              >
+                <Home className="w-4 h-4 text-slate-400" />
+                Landing Page
+              </Link>
+              <a
+                href="https://github.com/ashleyalmeida07/MorganForge_college_round"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 transition-all"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Terminal className="w-4 h-4 text-slate-400" />
+                  GitHub Source
+                </div>
+                <ExternalLink className="w-3 h-3 text-slate-400" />
+              </a>
+              <Link
+                href="/rulesets"
+                className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 transition-all"
+              >
+                <div className="flex items-center gap-2.5">
+                  <BookOpen className="w-4 h-4 text-slate-400" />
+                  WASM Specs
+                </div>
               </Link>
             </div>
           </div>
-          <div>
-            <div className="text-xs font-semibold text-slate-500 mb-2 px-4 uppercase tracking-wider">Workspace</div>
-            <div className="space-y-1 px-3">
-              <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md">
-                <Users className="mr-3 h-4 w-4 text-slate-400" />
-                Team
-              </Button>
-            </div>
-          </div>
         </div>
-        <div className="p-3 mt-auto space-y-1 border-t border-slate-200">
-          <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md">
-            <HelpCircle className="mr-3 h-4 w-4 text-slate-400" />
-            Support
-          </Button>
-          <Button variant="ghost" className="w-full justify-start h-9 px-3 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md">
-            <BookOpen className="mr-3 h-4 w-4 text-slate-400" />
-            Docs
-          </Button>
-          <Button 
-            onClick={signOut} 
-            variant="ghost" 
-            className="w-full justify-start h-9 px-3 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md"
-          >
-            <LogOut className="mr-3 h-4 w-4 text-red-500" />
-            Log Out
-          </Button>
 
-          {user && (
-            <div className="flex items-center gap-3 pt-3 mt-2 border-t border-slate-100 px-1">
-              {avatarUrl ? (
-                <img src={avatarUrl} alt={displayName || "User"} className="w-8 h-8 rounded-full border border-slate-200 object-cover" />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-semibold text-xs">
-                  {displayName ? displayName[0].toUpperCase() : "U"}
+        {/* User Footer (Clean White) */}
+        <div className="p-3 mt-auto border-t border-slate-200/90 bg-slate-50/70 space-y-2">
+          {user ? (
+            <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200 shadow-xs">
+              <div className="flex items-center gap-2.5 overflow-hidden">
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt={displayName || "User"}
+                    className="w-7 h-7 rounded-full border border-slate-200 object-cover shrink-0"
+                  />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center text-blue-700 font-bold text-xs shrink-0">
+                    {displayName ? displayName[0].toUpperCase() : "U"}
+                  </div>
+                )}
+                <div className="overflow-hidden">
+                  <p className="text-xs font-semibold text-slate-800 truncate leading-tight">
+                    {displayName || "Authenticated"}
+                  </p>
+                  <p className="text-[10px] font-mono text-slate-400 truncate leading-tight">
+                    {user.email}
+                  </p>
                 </div>
-              )}
-              <div className="overflow-hidden">
-                <p className="text-xs font-semibold text-slate-800 truncate">{displayName || "User"}</p>
-                <p className="text-[11px] text-slate-400 truncate">{user.email}</p>
               </div>
+              <button
+                type="button"
+                onClick={signOut}
+                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                title="Log out"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
             </div>
+          ) : (
+            <Link
+              href="/login"
+              className="flex items-center justify-center gap-2 w-full py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition shadow-xs"
+            >
+              Sign In to Verity
+            </Link>
           )}
         </div>
-      </div>
-      
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        <div className="h-14 border-b border-slate-200 flex flex-row items-center justify-end px-6 gap-3 shrink-0 bg-white">
-          <WalletButton />
-          <Button variant="ghost" size="icon" className="rounded-full w-9 h-9 text-slate-500 hover:text-slate-900 hover:bg-slate-100 flex items-center justify-center">
-            <Send className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" className="rounded-full w-9 h-9 text-slate-500 hover:text-slate-900 hover:bg-slate-100 flex items-center justify-center">
-            <Bell className="h-4 w-4" />
-          </Button>
-          
-          <div className="flex items-center gap-2 pl-3 border-l border-slate-200">
-            <div className="w-8 h-8 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center overflow-hidden shrink-0">
-              {avatarUrl ? (
-                <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-              ) : (
-                <UserIcon className="w-4 h-4 text-blue-600" />
-              )}
-            </div>
-            <span className="text-xs font-semibold text-slate-800">
-              {displayName || "Guest"}
-            </span>
-            <Button 
-              onClick={signOut} 
-              variant="ghost" 
-              size="sm"
-              className="ml-1 text-xs h-8 px-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md"
-              title="Log Out"
+      </aside>
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden bg-[#F8FAFC]">
+        {/* Top Navbar (White Theme) */}
+        <header className="h-16 border-b border-slate-200/90 bg-white/95 backdrop-blur-xl flex items-center justify-between px-4 sm:px-6 shrink-0 z-20 shadow-xs">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-900"
             >
-              <LogOut className="h-4 w-4" />
-              <span className="sr-only">Log Out</span>
-            </Button>
+              {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+            </button>
+
+            <div>
+              <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+                <span>Portal</span>
+                <ChevronRight className="w-3 h-3 text-slate-300" />
+                <span className="text-blue-600 font-semibold">{pathname.split('/')[1] || 'Dashboard'}</span>
+              </div>
+              <h1 className="text-sm font-bold text-slate-900 hidden sm:block">
+                {getPageTitle()}
+              </h1>
+            </div>
           </div>
-        </div>
-        <div className="flex-1 overflow-auto p-6 md:p-8">
-          <div className="mx-auto max-w-[1200px]">
+
+          {/* Right Action Bar */}
+          <div className="flex items-center gap-3">
+            <div className="hidden lg:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-[11px] font-mono text-slate-600">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>WASM Fuel Metering Active</span>
+            </div>
+
+            <WalletButton />
+          </div>
+        </header>
+
+        {/* Mobile Dropdown Menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-b border-slate-200 bg-white px-4 py-3 space-y-1 z-30 shadow-md">
+            {NAV.map(({ href, label, icon: Icon }) => (
+              <Link
+                key={href}
+                href={href}
+                onClick={() => setMobileMenuOpen(false)}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium ${
+                  pathname === href
+                    ? 'bg-blue-50 text-blue-700 font-semibold border border-blue-200'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                <span>{label}</span>
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {/* Scrollable Page Body */}
+        <main className="flex-1 overflow-y-auto scrollbar-thin p-4 sm:p-6 lg:p-8 web3-mesh-bg">
+          <div className="mx-auto max-w-[1280px]">
             {children}
           </div>
-        </div>
+        </main>
       </div>
     </div>
   );

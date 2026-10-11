@@ -156,6 +156,21 @@ export async function provePayroll(input: PayrollInput, request: PublicKey): Pro
   };
 }
 
+// BN254 base field modulus.
+const BN254_P = BigInt("21888242871839275222246405745257275088696311157297823662689037894645226208583");
+
+/**
+ * Chaos ZK_CORRUPT_PROOF (adversarial scenario 9): the same proof with A negated. Both points stay
+ * on the curve, so the on-chain pairing check (not point decoding) rejects it with InvalidProof.
+ * Matches backend/app/chain/zk.py corrupt_proof() and scripts/zk-smoke.mjs case 6.
+ */
+export function corruptProof(proof: ZkProof): ZkProof {
+  const y = BigInt("0x" + Array.from(proof.a.slice(32), (b) => b.toString(16).padStart(2, "0")).join(""));
+  const a = new Uint8Array(proof.a);
+  a.set(be32(((BN254_P - y) % BN254_P).toString()), 32);
+  return { ...proof, a, offchainValid: false };
+}
+
 const seed = (s: string) => utf8(s);
 export const zkConfigPda = () => PublicKey.findProgramAddressSync([seed("zk_config")], ZK_PROGRAM_ID)[0];
 export const zkRecordPda = (request: PublicKey) =>

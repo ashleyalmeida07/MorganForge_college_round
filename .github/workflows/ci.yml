@@ -1,0 +1,197 @@
+name: ci
+# Every push / PR:
+#   backend   pytest (unit + offline adversarial scenarios 1-9) + migrations/audit trigger on Postgres
+#   frontend  next build (type-checks every page)
+#   rulesets  rebuild drift report + wasmtime-vs-V8 determinism check (rulesets/build_all.sh --check)
+#   programs  anchor build, native Groth16 tests, then §5.6 program tests + smoke tests on a
+#             local solana-test-validator (throwaway keys: no secrets needed)
+# Manual (Actions -> ci -> Run workflow, e2e = true):
+#   e2e-devnet  backend/tests/test_adversarial.py against the deployed API + devnet (needs secrets)
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      e2e:
+        description: "Also run the devnet E2E adversarial suite (uses repo secrets)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt
+      - name: pytest
+        env:
+          VERITY_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          WORKERS_ENABLED: "false"
+        run: python -m pytest -q -rs
+
+  frontend:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+
+  rulesets:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rulesets/target
+          key: rulesets-${{ hashFiles('rulesets/Cargo.lock') }}
+      - name: Install the backend engine deps (wasmtime pin from backend/requirements.txt)
+        run: pip install "$(grep -E '^wasmtime' backend/requirements.txt)" pydantic-settings
+      - name: Build + determinism check (wasmtime vs V8)
+        run: bash rulesets/build_all.sh --check
+
+  programs:
+    runs-on: ubuntu-24.04
+    env:
+      AGAVE_VERSION: v3.1.14
+      ANCHOR_VERSION: 0.32.1
+    defaults:
+      run:
+        working-directory: programs/verity_core
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: programs/verity_core/package-lock.json
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cache/solana
+            ~/.local/share/solana
+          key: tools-agave-3.1.14-${{ hashFiles('programs/verity_core/**/Cargo.toml') }}
+          restore-keys: tools-agave-3.1.14-
+
+      - name: Install Solana + Anchor
+        run: |
+          if [ ! -x "$HOME/.local/share/solana/install/active_release/bin/solana" ]; then
+            sh -c "$(curl -sSfL https://release.anza.xyz/$AGAVE_VERSION/install)"
+          fi
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+          sudo curl -sSfL -o /usr/local/bin/anchor \
+            "https://github.com/solana-foundation/anchor/releases/download/v$ANCHOR_VERSION/anchor-$ANCHOR_VERSION-x86_64-unknown-linux-gnu"
+          sudo chmod +x /usr/local/bin/anchor
+
+      - name: Throwaway deployer key (local validator only)
+        run: |
+          mkdir -p ~/.config/solana
+          solana-keygen new --no-bip39-passphrase --silent --force -o ~/.config/solana/id.json
+          solana address
+
+      - name: Build
+        run: anchor build
+
+      - name: Native Groth16 verifier tests (snarkjs fixture)
+        run: cargo test -p verity_zk_verifier --test groth16_fixture
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Program tests + smoke tests on a local validator
+        env:
+          DEPLOYER_KEYPAIR: /home/runner/.config/solana/id.json
+          RPC_URL: http://127.0.0.1:8899
+        run: |
+          pid() { sed -n 's/^declare_id!("\([^"]*\)");/\1/p' "programs/$1/src/lib.rs"; }
+          PID=$(pid verity_core); ZK_PID=$(pid verity_zk_verifier)
+          [ -n "$PID" ] && [ -n "$ZK_PID" ] || { echo 'could not read declare_id'; exit 1; }
+          echo "verity_core=$PID verity_zk_verifier=$ZK_PID"
+          solana-test-validator --reset --quiet --ledger /tmp/ledger \
+            --bpf-program "$PID" target/deploy/verity_core.so \
+            --bpf-program "$ZK_PID" target/deploy/verity_zk_verifier.so > /tmp/validator.log 2>&1 &
+          for i in $(seq 1 90); do solana cluster-version -u localhost >/dev/null 2>&1 && break; sleep 1; done
+          solana cluster-version -u localhost || { tail -50 /tmp/validator.log; exit 1; }
+          solana airdrop 100 -u localhost -k ~/.config/solana/id.json
+          node scripts/setup-devnet.mjs
+          node --test tests/verity_core.test.mjs
+          node scripts/smoke-test.mjs
+          PAYROLL_PROGRAM_HASH=$(printf 'ci-payroll-wasm' | sha256sum | cut -d' ' -f1) node scripts/setup-zk.mjs
+          node scripts/zk-smoke.mjs
+
+      - name: Validator log on failure
+        if: failure()
+        run: tail -100 /tmp/validator.log || true
+
+  e2e-devnet:
+    if: github.event_name == 'workflow_dispatch' && inputs.e2e
+    needs: [backend]
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Adversarial scenarios 1-9 against the deployment
+        env:
+          VERITY_E2E: "1"
+          VERITY_API_URL: ${{ secrets.VERITY_API_URL }}
+          VERITY_ADMIN_TOKEN: ${{ secrets.VERITY_ADMIN_TOKEN }}
+          REQUESTER_KEYPAIR_JSON: ${{ secrets.REQUESTER_KEYPAIR_JSON }}
+          PROVIDER_KEYPAIR_JSON: ${{ secrets.PROVIDER_KEYPAIR_JSON }}
+          SOLANA_RPC_URL: ${{ secrets.SOLANA_RPC_URL || 'https://api.devnet.solana.com' }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          WORKERS_ENABLED: "false"
+        run: python -m pytest -m devnet tests/test_adversarial.py -v -s

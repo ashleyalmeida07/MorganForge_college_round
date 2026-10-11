@@ -36,7 +36,8 @@ This applies `../supabase/migrations/*.sql` in order. The migration is
 idempotent and creates:
 - all tables, indexes and RLS policies
 - the `auth.users` to `profiles` trigger
-- the append-only guard on `audit_log`
+- the append-only guard on `audit_log`, and (0003) the trigger that computes
+  `seq` / `prev_hash` / `row_hash` itself, so the hash chain is enforced by the database
 - the chaos-flag seed rows
 - the public storage buckets (`programs`, `inputs`, `outputs`)
 - the Realtime publication
@@ -117,6 +118,7 @@ Never commit `.env` or `backend/keys/`.
 | `PINATA_GATEWAY` | optional | Gateway host, e.g. `xyz.mypinata.cloud` (default `gateway.pinata.cloud`) |
 | `FRONTEND_ORIGIN` | yes | Comma-separated CORS origins (e.g. `http://localhost:3000,https://verity.vercel.app`) |
 | `ADMIN_EMAILS` | yes | Comma-separated emails that get the admin role |
+| `DEV_ADMIN_TOKEN` | no | Local/E2E only: shared secret accepted as an admin bearer token off-mainnet. Leave unset on Render |
 | `WORKERS_ENABLED` | no | `true` (default) runs provider, verifier, finalizer and indexer jobs in-process |
 | `GROQ_API_KEY` / `ANTHROPIC_API_KEY` | optional | AI dispute explainer |
 
@@ -138,7 +140,7 @@ app/
 ├── config.py          pydantic-settings (backend/.env)
 ├── utils.py           canonical JSON, sha256, explorer links
 ├── db.py              Supabase service-role client, storage blobs, chaos flags
-├── audit.py           append-only hash-chained audit log (row_hash = sha256(prev_hash || canonical(payload)))
+├── audit.py           hash-chained audit log: v1 rows (backend hash) + v2 rows (DB trigger hash), chain verifier
 ├── auth.py            Supabase JWT auth, admin role
 ├── ipfs.py            Pinata pinning (optional, failures swallowed)
 ├── ai.py              "explain this dispute" (Groq / Anthropic, optional)
@@ -175,7 +177,12 @@ Because the message includes `request_pda`, an old receipt cannot be replayed
 on a new request. Verifiers re-execute the job and attest on-chain. A
 mismatch quorum leads to a dispute, which ends in the provider being slashed.
 The audit log is hash-chained in the database: deletes are blocked, and the
-only update allowed is setting `anchored_tx`. Every `AUDIT_ANCHOR_EVERY`
+only update allowed is setting `anchored_tx`. Since migration 0003 a BEFORE INSERT
+trigger assigns `seq`, `prev_hash` and `row_hash` under an advisory lock, ignoring what
+the client sends, and the hash covers every column (`hash_version` 2):
+`sha256_hex(join("\x1f", ["VERITY_AUDIT_V2", prev_hash, event_type, request_pda, actor, tx_sig, slot, payload::text]))`.
+Older rows keep `hash_version` 1 (`sha256_hex(prev_hash || canonical(payload))`); `/audit/verify`,
+the evidence bundle and `public.audit_log_verify()` check both. Every `AUDIT_ANCHOR_EVERY`
 rows, the chain head is anchored on Solana.
 
 ---
@@ -211,14 +218,18 @@ rows, the chain head is anchored on Solana.
 | POST | `/admin/bootstrap` | initialize config, register + stake provider, register verifiers (admin) |
 | POST | `/admin/sync/{pda}` | force re-index of one request (admin) |
 | POST | `/admin/run/{job}` | run a worker job immediately (admin) |
+| GET | `/admin/scenarios` | adversarial simulation catalog (admin) |
+| POST | `/admin/simulate` | `{scenario, fast?, bounty?}` one end-to-end devnet simulation; 409 while another runs (admin) |
+| POST | `/admin/simulate-all` | `{scenarios?, fast?, bounty?}` run every scenario back to back (admin) |
+| GET | `/admin/simulate/{id}`, `/admin/suites/{id}` | simulation step log / suite scoreboard (admin) |
 | POST | `/ai/explain-dispute` | `{request_pda}` → `{text}` |
 
 ---
 
 ## 5. Chaos flags (adversarial testing)
 
-Toggle these from `/admin` or `POST /admin/chaos`. They are stored in the
-`chaos_flags` table.
+Toggle these from `/admin` or `POST /admin/chaos`. They are written through to the
+`chaos_flags` table and loaded back at startup, so armed flags survive a restart.
 
 | Flag | Effect | Expected outcome |
 |---|---|---|
@@ -228,8 +239,21 @@ Toggle these from `/admin` or `POST /admin/chaos`. They are stored in the
 | `STORAGE_TAMPER_OUTPUT` | output blob edited after receipt | UI/CLI re-hash shows a red banner; the chain record is unaffected |
 | `PROVIDER_BAD_SIG` | receipt signed with the wrong key | on-chain Ed25519 check rejects the tx; no receipt is stored |
 | `VERIFIER_LAZY` | one verifier copies the provider's hash without executing | lazy verifier is outvoted; its wrong attestation stays on-chain |
+| `ZK_CORRUPT_PROOF` | Groth16 payroll proofs are sent with proof A negated (admin lab, and the request page's zk panel) | `verify_payroll` fails on-chain with `InvalidProof`; no proof record |
 
-End-to-end suite (against a deployment, never run in CI):
+The admin lab also runs a frivolous dispute (scenario 8: the challenger loses its stake)
+and "Run all scenarios" (`POST /admin/simulate-all`).
+
+Tests:
+
+| Suite | Runs | Covers |
+|---|---|---|
+| `tests/test_adversarial_offline.py` | always (CI) | scenarios 1–9 through the real provider / verifier / finalizer code, wasmtime and Ed25519, against an in-memory chain |
+| `tests/test_audit_chain.py` | always (CI) | v1/v2 audit hashes (vectors computed by Postgres), chaos-flag persistence |
+| `tests/test_audit_db.py` | CI (Postgres service) or `VERITY_TEST_DATABASE_URL` | migrations, the audit trigger, concurrent appends, append-only guard |
+| `tests/test_adversarial.py` | `VERITY_E2E=1`, or CI `workflow_dispatch` with `e2e` | scenarios 1–9 against a deployment + devnet |
+
+End-to-end suite (against a deployment):
 
 ```bash
 VERITY_E2E=1 VERITY_API_URL=https://<render-app>.onrender.com VERITY_ADMIN_TOKEN=<admin jwt> \

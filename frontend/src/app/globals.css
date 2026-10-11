@@ -1,7 +1,7 @@
-/* Tailwind is commented out to prevent conflicts with Webflow CSS reset */
 @import "tailwindcss";
 
 @theme inline {
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
   --color-success: var(--success);
@@ -88,7 +88,66 @@
   --warning-foreground: oklch(0.828 0.189 84.429);
 }
 
-/* Any Next.js specific overrides can go here */
+@layer base {
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+}
+
+/* Web3 / Blockchain Startup Aesthetics (Crisp Light Theme) */
+.web3-glass {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(226, 232, 240, 0.85);
+}
+
+.web3-glass-hover {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.web3-glass-hover:hover {
+  background: #ffffff;
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.06), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+  transform: translateY(-1px);
+}
+
+.web3-light-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+}
+
+.web3-glow-blue {
+  box-shadow: 0 0 20px -3px rgba(59, 130, 246, 0.25);
+}
+
+.web3-glow-emerald {
+  box-shadow: 0 0 20px -3px rgba(16, 185, 129, 0.25);
+}
+
+.web3-mesh-bg {
+  background-color: #f8fafc;
+  background-image: 
+    radial-gradient(at 15% 15%, rgba(59, 130, 246, 0.04) 0px, transparent 40%),
+    radial-gradient(at 85% 85%, rgba(99, 102, 241, 0.03) 0px, transparent 40%),
+    radial-gradient(at 50% 50%, rgba(14, 165, 233, 0.02) 0px, transparent 60%);
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(203, 213, 225, 0.8);
+  border-radius: 9999px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 1);
+}
 
 .chaos-grid {
   display: grid;
@@ -144,4 +203,5 @@
   max-height: 200px;
   overflow-y: auto;
 }
+
 

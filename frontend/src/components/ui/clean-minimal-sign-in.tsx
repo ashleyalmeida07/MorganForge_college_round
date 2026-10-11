@@ -104,34 +104,11 @@ const SignIn2 = ({ mode = "signin" }: { mode?: Mode }) => {
   };
  
   return (
-    <div className="section-hero-home min-h-screen w-full flex items-center justify-center z-1 overflow-hidden !p-0">
-      <div className="gradient-background">
-        <img
-          src="/images/f12e82d4b32bc32107e10535267eb88f_dark-circle.avif"
-          loading="eager"
-          sizes="(max-width: 2400px) 100vw, 2400px"
-          srcSet="/images/f12e82d4b32bc32107e10535267eb88f_dark-circle-p-500.avif 500w, /images/f12e82d4b32bc32107e10535267eb88f_dark-circle-p-800.avif 800w, /images/f12e82d4b32bc32107e10535267eb88f_dark-circle.avif 2400w"
-          alt="Dark Gradient"
-          className="dark-circle"
-        />
-        <img
-          src="/images/122b690b3a172c6eb9951588b1844a3e_blue-circle.avif"
-          loading="eager"
-          alt="Blue Gradient"
-          className="primary-circle"
-        />
-        <div className="dots-vector"></div>
-        <div className="dots-vector"></div>
-        <img
-          src="/images/56c71daa9866842d3ee5787a28d055a4_light-circle.avif"
-          loading="eager"
-          sizes="(max-width: 2200px) 100vw, 2200px"
-          srcSet="/images/56c71daa9866842d3ee5787a28d055a4_light-circle-p-500.png 500w, /images/56c71daa9866842d3ee5787a28d055a4_light-circle-p-800.png 800w, /images/56c71daa9866842d3ee5787a28d055a4_light-circle.avif 2200w"
-          alt="Light Blue Gradient"
-          className="secondary-circle"
-        />
-        <div className="overlay-light"></div>
-      </div>
+    <div className="relative min-h-screen w-full flex items-center justify-center overflow-hidden bg-slate-50 px-4">
+      <div
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(50rem_30rem_at_15%_0%,rgba(37,99,235,0.18),transparent),radial-gradient(40rem_30rem_at_90%_100%,rgba(14,165,233,0.14),transparent)]"
+        aria-hidden
+      />
       <div className="relative z-10 w-full max-w-sm bg-white rounded-3xl shadow-xl p-8 flex flex-col items-center border border-blue-100 text-black">
         <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-white mb-6 shadow-lg shadow-opacity-5">
           <LogIn className="w-7 h-7 text-black" />

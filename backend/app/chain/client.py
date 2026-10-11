@@ -862,7 +862,12 @@ class ChainClient:
             await asyncio.sleep(CONFIRM_POLL_SECS)
 
     async def _send_once(
-        self, label: str, ixs: list[Instruction], payer: Keypair, signers: Sequence[Keypair]
+        self,
+        label: str,
+        ixs: list[Instruction],
+        payer: Keypair,
+        signers: Sequence[Keypair],
+        skip_preflight: bool = False,
     ) -> str:
         bh_resp = await self._call(f"{label}: get_latest_blockhash", self.rpc.get_latest_blockhash(Confirmed))
         blockhash = bh_resp.value.blockhash
@@ -872,7 +877,7 @@ class ChainClient:
         try:
             resp = await self.rpc.send_raw_transaction(
                 bytes(tx),
-                opts=TxOpts(skip_confirmation=True, skip_preflight=False, preflight_commitment=Confirmed),
+                opts=TxOpts(skip_confirmation=True, skip_preflight=skip_preflight, preflight_commitment=Confirmed),
             )
         except Exception as e:  # noqa: BLE001
             err = _error_from_exception(e, label)
@@ -888,12 +893,19 @@ class ChainClient:
         return str(sig)
 
     async def _send(
-        self, label: str, ixs: list[Instruction], payer: Keypair, signers: Sequence[Keypair] = ()
+        self,
+        label: str,
+        ixs: list[Instruction],
+        payer: Keypair,
+        signers: Sequence[Keypair] = (),
+        skip_preflight: bool = False,
     ) -> str:
+        """Send and confirm. With skip_preflight a failing tx still lands on chain, so the
+        raised ChainError carries its signature (an explorer link to the rejection)."""
         last: _BlockhashExpired | None = None
         for attempt in range(1, SEND_ATTEMPTS + 1):
             try:
-                return await self._send_once(label, ixs, payer, signers)
+                return await self._send_once(label, ixs, payer, signers, skip_preflight)
             except _BlockhashExpired as e:
                 last = e
                 log.warning("%s: blockhash expired (attempt %d/%d)", label, attempt, SEND_ATTEMPTS)

@@ -84,8 +84,8 @@ function IntegrityBanner({ verify }: { verify: ReturnType<typeof useApi<AuditVer
 }
 
 export default function ActivityPage() {
-  const verify = useApi<AuditVerifyOut>('/audit/verify', 20000);
-  const feed = useApi<AuditLogRow[]>('/activity?limit=200', 10000);
+  const verify = useApi<AuditVerifyOut>('/audit/verify', 20000, [{ table: 'audit_log' }]);
+  const feed = useApi<AuditLogRow[]>('/activity?limit=200', 10000, [{ table: 'audit_log' }]);
   const [eventType, setEventType] = useState('');
 
   const rows = useMemo(() => feed.data ?? [], [feed.data]);

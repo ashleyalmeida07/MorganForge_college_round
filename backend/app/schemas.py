@@ -138,6 +138,12 @@ class SimulateIn(BaseModel):
     bounty: int = Field(default=10_000_000, ge=1_000_000, le=1_000_000_000)
 
 
+class SuiteIn(BaseModel):
+    scenarios: list[str] | None = Field(default=None, description="Scenario ids to run (default: all, in catalog order)")
+    fast: bool = Field(default=True, description="Temporarily shorten the challenge window for a fast demo")
+    bounty: int = Field(default=10_000_000, ge=1_000_000, le=1_000_000_000)
+
+
 class BootstrapIn(BaseModel):
     min_provider_stake: int = Field(default=100_000_000, ge=0)
     min_dispute_stake: int = Field(default=50_000_000, ge=0)

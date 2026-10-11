@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { env } from "@/lib/env";
 
-const PROTECTED = ["/dashboard", "/create-job", "/provider"];
+const PROTECTED = ["/dashboard", "/create-job", "/provider", "/admin", "/rulesets/new"];
 
 /** Refreshes the Supabase session cookie on every request and guards app routes. */
 export async function proxy(request: NextRequest) {

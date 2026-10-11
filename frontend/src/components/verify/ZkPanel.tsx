@@ -3,12 +3,21 @@
 import { useState } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
-import { CheckCircle2, Loader2, Sigma, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, Sigma, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { explorerTx } from "@/lib/env";
 import { sha256Hex } from "@/lib/hash";
-import { buildVerifyTx, parsePayrollInput, payrollOutputJson, provePayroll, type PayrollInput, type ZkProof } from "@/lib/zk";
+import { useChaosFlag } from "@/lib/realtime";
+import {
+  buildVerifyTx,
+  corruptProof,
+  parsePayrollInput,
+  payrollOutputJson,
+  provePayroll,
+  type PayrollInput,
+  type ZkProof,
+} from "@/lib/zk";
 
 import type { ZkInfo } from "./types";
 import { errorMessage, ExtLink, fmtTime, HashValue, normHex, Panel, Pill, shortHash } from "./ui";
@@ -93,6 +102,10 @@ export function ZkPanel({
   const [busy, setBusy] = useState<"prove" | "submit" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sig, setSig] = useState<string | null>(null);
+  const [rejected, setRejected] = useState<{ sig: string; err: string } | null>(null);
+  // Adversarial scenario 9: while the admin lab arms ZK_CORRUPT_PROOF, the proof is corrupted
+  // before it is sent, to demonstrate that the on-chain verifier rejects it.
+  const corrupt = useChaosFlag("ZK_CORRUPT_PROOF", !!zk?.eligible && !!allowSubmit);
 
   if (!zk?.eligible) return null;
 
@@ -124,14 +137,21 @@ export function ZkPanel({
     if (!publicKey || !input || !proof) return;
     setBusy("submit");
     setError(null);
+    setRejected(null);
     try {
-      const tx = await buildVerifyTx(connection, publicKey, new PublicKey(pda), input, proof);
-      const signature = await sendTransaction(tx, connection);
+      const sent = corrupt ? corruptProof(proof) : proof;
+      const tx = await buildVerifyTx(connection, publicKey, new PublicKey(pda), input, sent);
+      // A corrupted proof skips preflight so the rejection lands on-chain with an explorer link.
+      const signature = await sendTransaction(tx, connection, { skipPreflight: corrupt });
       const { lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
       const conf = await connection.confirmTransaction(
         { signature, blockhash: tx.recentBlockhash ?? "", lastValidBlockHeight },
         "confirmed",
       );
+      if (conf.value.err && corrupt) {
+        setRejected({ sig: signature, err: JSON.stringify(conf.value.err) });
+        return;
+      }
       if (conf.value.err) throw new Error(`Transaction failed on-chain: ${JSON.stringify(conf.value.err)}`);
       setSig(signature);
       onVerified?.();
@@ -182,6 +202,18 @@ export function ZkPanel({
             )}
           </div>
           {proof && allowSubmit && !connected && <p className="text-sm text-amber-700">Connect your wallet to submit the proof on-chain.</p>}
+          {corrupt && allowSubmit && (
+            <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              Chaos ZK_CORRUPT_PROOF is armed: the proof will be corrupted before it is sent, and the on-chain verifier should reject
+              it (InvalidProof).
+            </p>
+          )}
+          {rejected && (
+            <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+              Corrupted proof rejected on-chain, as expected. <ExtLink href={explorerTx(rejected.sig)}>View the failed transaction</ExtLink>
+            </p>
+          )}
 
           {proof && (
             <dl className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 p-4 text-sm sm:grid-cols-4">

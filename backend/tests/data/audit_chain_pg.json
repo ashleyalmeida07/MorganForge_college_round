@@ -1,0 +1,78 @@
+[
+ {
+  "seq": 1,
+  "event_type": "Legacy",
+  "request_pda": null,
+  "actor": null,
+  "payload": {
+   "a": 1,
+   "b": "x"
+  },
+  "tx_sig": null,
+  "slot": null,
+  "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "row_hash": "6b496fc2bc8371de6c10d822d284f25a1bccb5be92f063fddd84d0cb78267697",
+  "hash_version": 1,
+  "payload_text": "{\"a\": 1, \"b\": \"x\"}"
+ },
+ {
+  "seq": 2,
+  "event_type": "Event0",
+  "request_pda": "PDA0",
+  "actor": "actor",
+  "payload": {
+   "n": 5,
+   "s": "q\"uo\\te\n\u0001é",
+   "nested": {
+    "a": null,
+    "bb": true,
+    "zz": [
+     1,
+     2,
+     {
+      "k": "v"
+     }
+    ]
+   },
+   "request": "abc"
+  },
+  "tx_sig": "sig",
+  "slot": 42,
+  "prev_hash": "6b496fc2bc8371de6c10d822d284f25a1bccb5be92f063fddd84d0cb78267697",
+  "row_hash": "6fb2fc5a88888ec9b166046d9d40179a7ed923d8819ac753acf4097cb3ef96c9",
+  "hash_version": 2,
+  "payload_text": "{\"n\": 5, \"s\": \"q\\\"uo\\\\te\\n\\u0001é\", \"nested\": {\"a\": null, \"bb\": true, \"zz\": [1, 2, {\"k\": \"v\"}]}, \"request\": \"abc\"}"
+ },
+ {
+  "seq": 3,
+  "event_type": "Event1",
+  "request_pda": "PDA1",
+  "actor": null,
+  "payload": {
+   "a": 5,
+   "b": 4,
+   "k": 2,
+   "kk": 3,
+   "long_key_name": 1
+  },
+  "tx_sig": null,
+  "slot": null,
+  "prev_hash": "6fb2fc5a88888ec9b166046d9d40179a7ed923d8819ac753acf4097cb3ef96c9",
+  "row_hash": "be726b6f189ecb975e32e887fefad4e34fee0905c3185ae15ee443a98a85dc8f",
+  "hash_version": 2,
+  "payload_text": "{\"a\": 5, \"b\": 4, \"k\": 2, \"kk\": 3, \"long_key_name\": 1}"
+ },
+ {
+  "seq": 4,
+  "event_type": "Event2",
+  "request_pda": null,
+  "actor": "actor",
+  "payload": {},
+  "tx_sig": null,
+  "slot": null,
+  "prev_hash": "be726b6f189ecb975e32e887fefad4e34fee0905c3185ae15ee443a98a85dc8f",
+  "row_hash": "549290e0834871487140f6da7dfbef8418441ef4c5b826619cb646573ae96778",
+  "hash_version": 2,
+  "payload_text": "{}"
+ }
+]

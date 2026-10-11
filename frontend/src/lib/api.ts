@@ -343,3 +343,32 @@ export interface ScenarioMeta {
   flags: string[];
 }
 
+
+export interface SuiteRun {
+  scenario: string;
+  label: string;
+  status: "pending" | "running" | "done" | "error";
+  sim_id?: string;
+  passed?: boolean;
+  detected?: boolean | null;
+  final_status?: string | null;
+  expected?: string[] | null;
+  request_pda?: string | null;
+  error?: string | null;
+  duration_s?: number | null;
+}
+
+/** POST /admin/simulate-all, GET /admin/suites/{id}: every scenario run back to back. */
+export interface SuiteDetail {
+  id: string;
+  status: "running" | "done";
+  started_at: string;
+  finished_at?: string | null;
+  elapsed_s: number;
+  current?: string | null;
+  total: number;
+  completed: number;
+  passed: number;
+  failed: number;
+  runs: SuiteRun[];
+}

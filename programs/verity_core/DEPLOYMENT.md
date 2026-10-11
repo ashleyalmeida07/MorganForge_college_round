@@ -16,6 +16,24 @@ Explorer: https://explorer.solana.com/address/ByADChPce9hwCuSak9hFwiiCyndYGj7dkY
 - `idl/verity_core.json`, `idl/verity_core.ts` — IDL + TS types for frontend/backend (copy to `frontend/src/idl/` and the backend).
 - `keys/` (gitignored, never commit): `deployer.json`, `verity_core-keypair.json`, `provider.json`, `verifier1-3.json`.
 
+## Tests (local validator, every push: `programs` job in `/.github/workflows/ci.yml`)
+`tests/verity_core.test.mjs` covers Implementation_plan.md §5.6: (1) happy path → Verified + bounty paid,
+(2) tampered receipt → mismatch quorum → dispute → Rejected + slash, (3) unstaked provider cannot claim,
+(4) forged signature and replayed receipt rejected (`SignatureMismatch`), (5) finalize before the window
+fails (`ChallengeWindowOpen`), (6) expire refunds the bounty, plus (7) frivolous dispute → provider wins
+the challenger's stake. `scripts/zk-smoke.mjs` case 6 sends a corrupted Groth16 proof (proof A negated,
+chaos `ZK_CORRUPT_PROOF`) → `InvalidProof`. The root CI uses a throwaway deployer key and loads both
+`.so` files at their `declare_id!` addresses, so it needs no secrets.
+```
+solana-test-validator --reset --bpf-program <core id> target/deploy/verity_core.so \
+  --bpf-program <zk id> target/deploy/verity_zk_verifier.so &
+export RPC_URL=http://127.0.0.1:8899 DEPLOYER_KEYPAIR=~/.config/solana/id.json
+node scripts/setup-devnet.mjs && node --test tests/verity_core.test.mjs && node scripts/smoke-test.mjs
+```
+`tests/verity_core.test.mjs` refuses devnet/mainnet URLs (it rewrites the challenge window). The
+`.github/workflows/build.yml` in this folder is the root workflow of the private build mirror (GitHub
+ignores nested `.github/` directories); keep it in sync with the root CI.
+
 ## Verified on devnet (scripts/smoke-test.mjs)
 1. Happy path: create → claim → Ed25519-signed receipt → 2 registered-verifier attestations → finalize → Verified, bounty paid.
 2. Receipt signed by the wrong key → rejected (`SignatureMismatch`).
@@ -36,6 +54,11 @@ DEPLOYER_KEYPAIR=keys/deployer.json node scripts/setup-devnet.mjs   # idempotent
 DEPLOYER_KEYPAIR=keys/deployer.json node scripts/smoke-test.mjs
 ```
 Deploying from GitHub Actions to public devnet stalls (RPC rate limits on shared runner IPs); deploy locally or use a dedicated RPC (Helius) URL.
+
+The same steps are wrapped by `scripts/deploy_program.sh core|zk [--so file] [--setup] [--smoke]` at the repo
+root (checks the program keypair against `declare_id!`, asks before deploying). `scripts/deploy_program.py`
+does the deploy/upgrade through the upgradeable BPF loader directly (solders, no CLI; §15.3) — slower,
+for machines without the Solana CLI.
 
 ## verity_zk_verifier (Groth16 payroll proofs) — devnet
 

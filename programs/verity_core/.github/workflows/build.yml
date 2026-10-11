@@ -1,4 +1,8 @@
 name: test-deploy
+# NOTE: GitHub only runs workflows from a repo's root .github/. In this monorepo the
+# equivalent (secret-free) job is `programs` in /.github/workflows/ci.yml; this copy is
+# the root workflow of the private build mirror JACELL100/verity-solana-build, which
+# mirrors programs/verity_core/ and builds with the real program keypair.
 # 1. Build verity_core + verity_zk_verifier; native Groth16 verifier tests.
 # 2. Setup + end-to-end smoke tests (core + zk) against a LOCAL validator.
 # Devnet deploy is done locally (see DEPLOYMENT.md): public devnet RPC stalls from shared CI IPs.
@@ -82,7 +86,7 @@ jobs:
       - name: Install script deps
         run: npm ci --no-audit --no-fund
 
-      - name: TEST on local validator (setup + core smoke test + zk smoke test)
+      - name: TEST on local validator (setup + program tests + core smoke test + zk smoke test)
         env:
           DEPLOYER_KEYPAIR: /home/runner/.config/solana/id.json
           RPC_URL: http://127.0.0.1:8899
@@ -96,6 +100,7 @@ jobs:
           solana cluster-version -u localhost || { tail -50 /tmp/validator.log; exit 1; }
           solana airdrop 100 -u localhost -k ~/.config/solana/id.json
           node scripts/setup-devnet.mjs
+          node --test tests/verity_core.test.mjs
           node scripts/smoke-test.mjs
           PAYROLL_PROGRAM_HASH=$(printf 'ci-payroll-wasm' | sha256sum | cut -d' ' -f1) node scripts/setup-zk.mjs
           node scripts/zk-smoke.mjs

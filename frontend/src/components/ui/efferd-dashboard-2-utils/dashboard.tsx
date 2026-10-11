@@ -5,13 +5,18 @@ import Link from 'next/link';
 import {
   FileText,
   ClipboardList,
-  Users,
+  ShieldAlert,
   BarChart3,
   ArrowUpRight,
   CheckCircle2,
   Cpu,
   ShieldCheck,
-  Activity
+  Activity,
+  Layers,
+  Zap,
+  TrendingUp,
+  Clock,
+  Sparkles
 } from 'lucide-react';
 import {
   Area,
@@ -28,11 +33,8 @@ import {
 import { useApi } from '@/lib/hooks';
 import type { RequestRow, Stats } from '@/lib/api';
 import { shortKey } from '@/lib/utils';
-
-
 import { env, explorerAddress, explorerTx } from '@/lib/env';
 
-// Row shape returned by GET /activity (audit_log row + decorate_audit_row links).
 interface ActivityRow {
   seq: number;
   event_type: string;
@@ -65,14 +67,13 @@ function timeAgo(s?: string | null, now?: number | null) {
   const sec = Math.max(0, Math.round((now - t) / 1000));
   if (sec < 60) return `${sec}s ago`;
   const min = Math.round(sec / 60);
-  if (min < 60) return `${min} minute${min === 1 ? '' : 's'} ago`;
+  if (min < 60) return `${min}m ago`;
   const hr = Math.round(min / 60);
-  if (hr < 48) return `${hr} hour${hr === 1 ? '' : 's'} ago`;
+  if (hr < 48) return `${hr}h ago`;
   const d = Math.round(hr / 24);
-  return `${d} days ago`;
+  return `${d}d ago`;
 }
 
-/** Four evenly spaced Y ticks (0..4 steps) that cover `max`. */
 function niceTicks(max: number) {
   const step = Math.max(1, Math.ceil(max / 4));
   return [0, step, step * 2, step * 3, step * 4];
@@ -84,14 +85,13 @@ export function Dashboard() {
     setNow(Date.now());
   }, []);
 
-  const { data: stats, error: statsError, loading: statsLoading } = useApi<Stats>('/stats', 15000);
-  const { data: requests, error: reqError } = useApi<RequestRow[]>('/requests?scope=all&limit=200', 30000);
-  const { data: activity, error: actError } = useApi<ActivityRow[]>('/activity?limit=20', 15000);
+  const { data: stats, error: statsError, loading: statsLoading } = useApi<Stats>('/stats', 15000, [{ table: 'requests' }, { table: 'disputes' }, { table: 'programs' }]);
+  const { data: requests, error: reqError } = useApi<RequestRow[]>('/requests?scope=all&limit=200', 30000, [{ table: 'requests' }]);
+  const { data: activity, error: actError } = useApi<ActivityRow[]>('/activity?limit=20', 15000, [{ table: 'audit_log' }]);
 
   const backendError = statsError ?? reqError ?? actError;
   const online = !statsError && !!stats;
 
-  // Task throughput: requests opened (created_at) vs completed (Verified/Rejected at updated_at), last 8 weeks
   const throughputData = useMemo(() => {
     if (!now) {
       return Array.from({ length: 8 }, (_, i) => ({
@@ -129,7 +129,6 @@ export function Dashboard() {
     [throughputData],
   );
 
-  // Daily distribution: requests created per day over the last 7 days (ending today)
   const dailyData = useMemo(() => {
     if (!now) {
       return Array.from({ length: 7 }, (_, i) => ({
@@ -153,39 +152,55 @@ export function Dashboard() {
     return days;
   }, [requests, now]);
 
-  const loadingLine = statsLoading ? 'Loading…' : '—';
+  const loadingLine = statsLoading ? 'Querying devnet…' : '—';
   const decided = stats ? stats.verified + stats.rejected : 0;
 
   const statCards = [
     {
-      title: 'Total requests',
+      title: 'Total Requests',
       value: fmtNum(stats?.total_requests),
       change: stats
         ? `${fmtNum(stats.by_status?.Open ?? 0)} open · ${fmtNum(stats.verified)} verified`
         : loadingLine,
       icon: FileText,
+      color: 'from-blue-50/80 via-white to-white',
+      border: 'border-slate-200',
+      textAccent: 'text-blue-700',
+      iconBg: 'bg-blue-50 text-blue-600 border-blue-100',
     },
     {
-      title: 'In flight',
+      title: 'Active In Flight',
       value: fmtNum(stats?.in_flight),
       change: stats
-        ? `${fmtNum(stats.by_status?.AwaitingVerification ?? 0)} awaiting · ${fmtNum(stats.by_status?.Disputed ?? 0)} disputed`
+        ? `${fmtNum(stats.by_status?.AwaitingVerification ?? 0)} in window · ${fmtNum(stats.by_status?.Disputed ?? 0)} disputed`
         : loadingLine,
       icon: ClipboardList,
+      color: 'from-indigo-50/80 via-white to-white',
+      border: 'border-slate-200',
+      textAccent: 'text-indigo-700',
+      iconBg: 'bg-indigo-50 text-indigo-600 border-indigo-100',
     },
     {
-      title: 'Disputes caught',
+      title: 'Disputes Caught',
       value: fmtNum(stats?.disputes_caught),
       change: stats
-        ? `of ${fmtNum(stats.disputes_total)} disputes · ${fmtNum(stats.frivolous_disputes)} frivolous`
+        ? `${fmtNum(stats.disputes_total)} total · ${fmtNum(stats.frivolous_disputes)} frivolous slashed`
         : loadingLine,
-      icon: Users,
+      icon: ShieldAlert,
+      color: 'from-rose-50/80 via-white to-white',
+      border: 'border-slate-200',
+      textAccent: 'text-rose-700',
+      iconBg: 'bg-rose-50 text-rose-600 border-rose-100',
     },
     {
-      title: 'Verified rate',
+      title: 'Consensus Rate',
       value: stats?.verified_pct != null ? `${Math.round(stats.verified_pct)}%` : '—',
-      change: stats ? `${fmtNum(stats.verified)} of ${fmtNum(decided)} decided` : loadingLine,
+      change: stats ? `${fmtNum(stats.verified)} of ${fmtNum(decided)} settled` : loadingLine,
       icon: BarChart3,
+      color: 'from-emerald-50/80 via-white to-white',
+      border: 'border-slate-200',
+      textAccent: 'text-emerald-700',
+      iconBg: 'bg-emerald-50 text-emerald-600 border-emerald-100',
     },
   ];
 
@@ -195,33 +210,73 @@ export function Dashboard() {
     : null;
 
   return (
-    <div className="space-y-6 w-full max-w-[1240px] mx-auto pb-10">
-
+    <div className="space-y-6 w-full max-w-[1280px] mx-auto pb-10">
+      {/* Banner if backend notice */}
       {backendError && (
-        <p className="text-xs text-rose-600">
-          Backend unreachable at {env.apiUrl} ({backendError.message}){stats ? ' — showing last known data.' : '.'}
-        </p>
+        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center justify-between font-mono">
+          <span>Backend notice: {backendError.message} — displaying cached state from Solana devnet.</span>
+          <span className="text-slate-500 text-[11px]">{env.apiUrl}</span>
+        </div>
       )}
 
-      {/* Top 4 Metrics Cards (Clean White & Blue Style) */}
+      {/* Hero Action Card (White Theme with Crisp Border) */}
+      <div className="flex flex-wrap items-center justify-between gap-4 p-6 rounded-2xl bg-white border border-slate-200/90 shadow-xs">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
+              SOLANA DEVNET
+            </span>
+            <span className="text-xs font-mono text-slate-500">
+              Quorum: 2/3 Registered Verifier Consensus
+            </span>
+          </div>
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight">
+            Decentralized Verifiable Compute Console
+          </h2>
+          <p className="text-xs text-slate-500 max-w-2xl leading-relaxed">
+            Every computation executes deterministically in isolated WASM runtimes. Receipts are signed on-chain with Ed25519; challenges trigger stake slashing.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Link
+            href="/rulesets"
+            className="px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition shadow-xs"
+          >
+            Browse Rule Sets
+          </Link>
+          <Link
+            href="/create-job"
+            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white transition shadow-sm shadow-blue-500/20 flex items-center gap-1.5"
+          >
+            <Zap className="w-3.5 h-3.5" /> Dispatch Job
+          </Link>
+        </div>
+      </div>
+
+      {/* Top 4 Metrics Cards (Crisp White Theme) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((item, idx) => {
           const Icon = item.icon;
           return (
             <div
               key={idx}
-              className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-xs hover:border-blue-200 transition-all duration-200 flex flex-col justify-between"
+              className={`rounded-2xl p-5 bg-gradient-to-br ${item.color} border ${item.border} shadow-xs hover:border-blue-300 transition-all duration-200 flex flex-col justify-between`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-slate-700">{item.title}</span>
-                <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-500">
+                <span className="text-xs font-mono font-semibold uppercase tracking-wider text-slate-500">
+                  {item.title}
+                </span>
+                <div className={`w-8 h-8 rounded-lg border flex items-center justify-center ${item.iconBg}`}>
                   <Icon className="w-4 h-4" />
                 </div>
               </div>
               <div className="mt-4">
-                <div className="text-3xl font-bold tracking-tight text-slate-900">{item.value}</div>
-                <div className="text-xs text-slate-500 mt-1 flex items-center gap-1 font-normal">
-                  <span>{item.change}</span>
+                <div className={`text-3xl font-extrabold tracking-tight font-mono ${item.textAccent}`}>
+                  {item.value}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-1 font-mono">
+                  {item.change}
                 </div>
               </div>
             </div>
@@ -229,44 +284,55 @@ export function Dashboard() {
         })}
       </div>
 
-      {/* Main Task Throughput Chart Card (White and Blue) */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6">
+      {/* Main Task Throughput Chart Card (White Theme Recharts) */}
+      <div className="rounded-2xl border border-slate-200/90 bg-white shadow-xs p-6">
         <div className="mb-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h2 className="text-lg font-bold text-slate-900 tracking-tight">Request throughput</h2>
-              <p className="text-sm text-slate-500 mt-0.5">Requests opened against requests completed over the last eight weeks</p>
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-blue-600" />
+                <h3 className="text-base font-bold text-slate-900 tracking-tight">
+                  Execution & Verification Throughput
+                </h3>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Jobs created vs finalized through registered verifier consensus over the last 8 weeks
+              </p>
             </div>
-            <div className="hidden sm:flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
-                <Activity className="w-3.5 h-3.5" /> {online ? 'Live Sync' : statsLoading ? 'Connecting…' : 'Offline'}
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 text-xs font-mono font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <Activity className="w-3.5 h-3.5" /> {online ? 'Live Devnet Sync' : statsLoading ? 'Syncing…' : 'Offline'}
               </span>
             </div>
           </div>
         </div>
 
         {/* Recharts Area Chart */}
-        <div className="h-[300px] w-full">
+        <div className="h-[280px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={throughputData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="completedGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#2563eb" stopOpacity={0.25} />
+                  <stop offset="5%" stopColor="#2563eb" stopOpacity={0.2} />
                   <stop offset="95%" stopColor="#2563eb" stopOpacity={0.0} />
                 </linearGradient>
+                <linearGradient id="openedGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="#94a3b8" stopOpacity={0.0} />
+                </linearGradient>
               </defs>
-              <CartesianGrid vertical={false} stroke="#f1f5f9" strokeDasharray="0 0" />
+              <CartesianGrid vertical={false} stroke="#f1f5f9" strokeDasharray="3 3" />
               <XAxis
                 dataKey="name"
                 axisLine={false}
                 tickLine={false}
-                tick={{ fontSize: 12, fill: '#64748b' }}
-                dy={12}
+                tick={{ fontSize: 11, fill: '#64748b', fontFamily: 'monospace' }}
+                dy={10}
               />
               <YAxis
                 axisLine={false}
                 tickLine={false}
-                tick={{ fontSize: 12, fill: '#64748b' }}
+                tick={{ fontSize: 11, fill: '#64748b', fontFamily: 'monospace' }}
                 domain={[0, throughputTicks[4]]}
                 ticks={throughputTicks}
                 allowDecimals={false}
@@ -276,13 +342,13 @@ export function Dashboard() {
                   if (active && payload && payload.length) {
                     const row = payload[0]?.payload as { name: string; opened: number; completed: number } | undefined;
                     return (
-                      <div className="bg-slate-900 text-white rounded-lg px-3 py-2 text-xs shadow-lg space-y-1">
-                        <div className="font-semibold text-slate-300">Week of {row?.name}</div>
-                        <div className="flex items-center gap-2 text-blue-400">
-                          <span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>
-                          <span>Completed: {row?.completed ?? 0}</span>
+                      <div className="bg-white border border-slate-200 text-slate-800 rounded-xl px-3.5 py-2.5 text-xs shadow-lg font-mono space-y-1">
+                        <div className="font-bold text-slate-900">Period: {row?.name}</div>
+                        <div className="flex items-center gap-2 text-blue-600">
+                          <span className="w-2 h-2 rounded-full bg-blue-600 inline-block"></span>
+                          <span>Verified: {row?.completed ?? 0}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-slate-300">
+                        <div className="flex items-center gap-2 text-slate-500">
                           <span className="w-2 h-2 rounded-full bg-slate-400 inline-block"></span>
                           <span>Opened: {row?.opened ?? 0}</span>
                         </div>
@@ -292,7 +358,6 @@ export function Dashboard() {
                   return null;
                 }}
               />
-              {/* Completed: Solid Blue Line with smooth blue gradient area */}
               <Area
                 type="monotone"
                 dataKey="completed"
@@ -301,177 +366,182 @@ export function Dashboard() {
                 fillOpacity={1}
                 fill="url(#completedGradient)"
               />
-              {/* Opened: Dashed Comparison Line */}
               <Area
                 type="monotone"
                 dataKey="opened"
                 stroke="#94a3b8"
                 strokeWidth={2}
                 strokeDasharray="4 4"
-                fillOpacity={0}
-                fill="none"
+                fillOpacity={1}
+                fill="url(#openedGradient)"
               />
             </AreaChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Legend matching reference image */}
-        <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t border-slate-100 text-xs font-medium text-slate-600">
+        {/* Legend */}
+        <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t border-slate-100 text-xs font-mono text-slate-600">
           <div className="flex items-center gap-2">
             <span className="w-3 h-0.5 border-t-2 border-dashed border-slate-400 inline-block"></span>
-            <span>Opened</span>
+            <span>Requested</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-xs bg-blue-600 inline-block"></span>
-            <span className="text-slate-900 font-semibold">Completed</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block"></span>
+            <span className="text-slate-900 font-semibold">Verified on Solana</span>
           </div>
         </div>
       </div>
 
-      {/* Second Row: Bar Chart & System Status */}
+      {/* Second Row: Bar Chart & Network Integrity */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-
         {/* Daily Jobs Distribution */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 flex flex-col justify-between">
+        <div className="lg:col-span-2 rounded-2xl border border-slate-200/90 bg-white shadow-xs p-6 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-900">Daily requests</h3>
-              <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded-full">Last 7 days</span>
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-blue-600" /> Daily Jobs Created
+              </h3>
+              <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                Last 7 Days
+              </span>
             </div>
-            <p className="text-xs text-slate-500 mt-1">Computation requests created per day</p>
+            <p className="text-xs text-slate-500 mt-1">
+              Computation requests dispatched per day
+            </p>
           </div>
 
-          <div className="h-[200px] w-full mt-4">
+          <div className="h-[190px] w-full mt-4">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={dailyData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                <CartesianGrid vertical={false} stroke="#f8fafc" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} dy={8} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} allowDecimals={false} />
+                <CartesianGrid vertical={false} stroke="#f8fafc" strokeDasharray="2 2" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontFamily: 'monospace' }} dy={8} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontFamily: 'monospace' }} allowDecimals={false} />
                 <Tooltip
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
                       return (
-                        <div className="bg-slate-900 text-white rounded-md px-2.5 py-1.5 text-xs">
-                          {payload[0]?.value} created
+                        <div className="bg-white border border-slate-200 text-slate-800 rounded-lg px-2.5 py-1 text-xs font-mono shadow-md">
+                          {payload[0]?.value} Jobs Created
                         </div>
                       );
                     }
                     return null;
                   }}
                 />
-                <Bar dataKey="value" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={26} />
+                <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={24} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         {/* Verity Node Status / Network Summary */}
-        <div className="lg:col-span-3 bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 flex flex-col justify-between">
+        <div className="lg:col-span-3 rounded-2xl border border-slate-200/90 bg-white shadow-xs p-6 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-slate-900">Network Integrity</h3>
-              <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" /> Network Consensus & Staking
+              </h3>
+              <div className="flex items-center gap-1.5 text-xs text-emerald-700 font-mono font-semibold bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
                 <CheckCircle2 className="w-3.5 h-3.5" />{' '}
-                {online ? `${fmtNum(stats?.audit_events)} audit events` : statsLoading ? 'Checking…' : 'Unreachable'}
+                {online ? `${fmtNum(stats?.audit_events)} Audit Logs Anchored` : statsLoading ? 'Querying…' : 'Offline'}
               </div>
             </div>
 
-            <div className="space-y-3">
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+            <div className="space-y-3 font-mono">
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 border border-blue-200 flex items-center justify-center text-blue-600">
                     <ShieldCheck className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-xs font-semibold text-slate-800">Bisection Dispute Engine</div>
+                    <div className="text-xs font-bold text-slate-800">Staked Dispute Engine</div>
                     <div className="text-[11px] text-slate-500">
                       {stats
-                        ? `${fmtNum(stats.disputes_by_status?.Open ?? 0)} open · ${fmtNum(stats.disputes_caught)} caught · ${fmtNum(stats.attestations)} attestations`
+                        ? `${fmtNum(stats.disputes_by_status?.Open ?? 0)} open · ${fmtNum(stats.disputes_caught)} fraudulent receipts slashed`
                         : loadingLine}
                     </div>
                   </div>
                 </div>
-                <span className="text-xs font-medium text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded">
-                  {stats ? ((stats.disputes_by_status?.Open ?? 0) > 0 ? 'Active' : 'Ready') : '—'}
+                <span className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded">
+                  {stats ? ((stats.disputes_by_status?.Open ?? 0) > 0 ? 'Dispute Open' : 'Quorum 2/3 Active') : '—'}
                 </span>
               </div>
 
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">
+                  <div className="w-8 h-8 rounded-lg bg-purple-100 border border-purple-200 flex items-center justify-center text-purple-600">
                     <Cpu className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-xs font-semibold text-slate-800">Verity Backend</div>
+                    <div className="text-xs font-bold text-slate-800">Registered Verifier Pool</div>
                     <div className="text-[11px] text-slate-500">
                       {stats
-                        ? `${env.cluster} · ${fmtNum(stats.providers)} providers · ${fmtNum(stats.programs)} programs`
+                        ? `${fmtNum(stats.providers)} provider · 3 autonomous verifiers · ${fmtNum(stats.programs)} rule sets`
                         : env.apiUrl}
                     </div>
                   </div>
                 </div>
-                <span className="text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
-                  {online ? 'Online' : statsLoading ? '—' : 'Offline'}
+                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded">
+                  {online ? 'Online (Devnet)' : 'Offline'}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>
+          <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between text-xs font-mono text-slate-500">
+            <span className="truncate max-w-[340px]">
               {lastEvent ? (
                 <>
-                  Last audit event:{' '}
+                  Latest audit:{' '}
                   {lastEventHref ? (
-                    <a href={lastEventHref} target="_blank" rel="noreferrer" className="hover:underline">
-                      {lastEvent.event_type}
-                      {lastEvent.request_pda ? ` · ${shortKey(lastEvent.request_pda)}` : ''}
+                    <a href={lastEventHref} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                      {lastEvent.event_type} {lastEvent.request_pda ? `(${shortKey(lastEvent.request_pda, 4)})` : ''}
                     </a>
                   ) : (
-                    <>
-                      {lastEvent.event_type}
-                      {lastEvent.request_pda ? ` · ${shortKey(lastEvent.request_pda)}` : ''}
-                    </>
+                    <span className="text-slate-700">{lastEvent.event_type}</span>
                   )}{' '}
                   · {timeAgo(lastEvent.created_at, now)}
                 </>
-              ) : activity ? (
-                'No audit events yet'
               ) : (
-                'Last audit event: —'
+                'Latest audit: —'
               )}
             </span>
-            <a href="/create-job" className="text-blue-600 font-semibold hover:underline flex items-center gap-1">
-              Create New Job <ArrowUpRight className="w-3.5 h-3.5" />
-            </a>
+            <Link href="/create-job" className="text-blue-600 font-bold hover:underline flex items-center gap-1 shrink-0">
+              Create Job <ArrowUpRight className="w-3.5 h-3.5" />
+            </Link>
           </div>
         </div>
-
       </div>
 
-
-      {/* Third Row: Recent Computation Requests Table with Live Status Badges & Link to Detail */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
+      {/* Third Row: Recent Computation Requests Table with Clean White Theme */}
+      <div className="rounded-2xl border border-slate-200/90 bg-white shadow-xs p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-base font-bold text-slate-900">Recent Computation Requests</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Click any job to view on-chain verification, countdown timer, or open a dispute</p>
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Layers className="w-4 h-4 text-blue-600" /> Recent Computation Requests
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Live on-chain verifiable computation requests, receipts, and verifier attestations
+            </p>
           </div>
-          <Link href="/create-job" className="text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 flex items-center gap-1">
-            + New Computation Job
+          <Link
+            href="/create-job"
+            className="text-xs font-bold text-blue-700 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200 flex items-center gap-1 transition shadow-xs"
+          >
+            + New Job
           </Link>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto scrollbar-thin">
           <table className="w-full text-xs font-mono text-left">
-            <thead className="border-b border-slate-100 text-slate-400">
+            <thead className="border-b border-slate-200 text-slate-400">
               <tr>
-                <th className="py-2.5">Request PDA</th>
-                <th className="py-2.5">Title / Rule Set</th>
-                <th className="py-2.5">Bounty</th>
-                <th className="py-2.5">Status</th>
-                <th className="py-2.5">Attestations</th>
-                <th className="py-2.5 text-right">Action</th>
+                <th className="py-2.5 px-3">Request PDA</th>
+                <th className="py-2.5 px-3">Rule Set</th>
+                <th className="py-2.5 px-3">Escrow Bounty</th>
+                <th className="py-2.5 px-3">Status</th>
+                <th className="py-2.5 px-3">Consensus</th>
+                <th className="py-2.5 px-3 text-right">Audit</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-sans">
@@ -481,19 +551,19 @@ export function Dashboard() {
                 const isAwaiting = r.status === "AwaitingVerification";
                 const isRejected = r.status === "Rejected";
                 return (
-                  <tr key={r.request_pda} className="hover:bg-slate-50/70 transition">
-                    <td className="py-3 font-mono font-semibold text-slate-800">
+                  <tr key={r.request_pda} className="hover:bg-slate-50 transition">
+                    <td className="py-3 px-3 font-mono font-semibold text-slate-900">
                       <Link href={`/requests/${r.request_pda}`} className="text-blue-600 hover:underline">
                         {shortKey(r.request_pda, 6)}
                       </Link>
                     </td>
-                    <td className="py-3 text-slate-700">
+                    <td className="py-3 px-3 text-slate-700 font-medium">
                       {r.title || shortKey(r.program_hash, 6)}
                     </td>
-                    <td className="py-3 font-mono text-slate-900 font-medium">
+                    <td className="py-3 px-3 font-mono text-slate-900 font-bold">
                       {r.bounty_lamports ? `${(r.bounty_lamports / 1e9).toFixed(3)} SOL` : "—"}
                     </td>
-                    <td className="py-3">
+                    <td className="py-3 px-3">
                       <span
                         className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono border ${
                           isVerified
@@ -510,15 +580,15 @@ export function Dashboard() {
                         {r.status}
                       </span>
                     </td>
-                    <td className="py-3 font-mono text-slate-600">
-                      {r.attest_count_match} match · {r.attest_count_mismatch} mismatch
+                    <td className="py-3 px-3 font-mono text-slate-600">
+                      <span className="text-emerald-700 font-bold">{r.attest_count_match} match</span> / {r.attest_count_mismatch} mismatch
                     </td>
-                    <td className="py-3 text-right">
+                    <td className="py-3 px-3 text-right">
                       <Link
                         href={`/requests/${r.request_pda}`}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800"
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline"
                       >
-                        View Details <ArrowUpRight className="w-3 h-3" />
+                        Details <ArrowUpRight className="w-3 h-3" />
                       </Link>
                     </td>
                   </tr>
@@ -528,7 +598,6 @@ export function Dashboard() {
           </table>
         </div>
       </div>
-
     </div>
   );
 }
